@@ -173,9 +173,31 @@ local PALETTE = {
 local isSoft = true
 for k, v in pairs(PALETTE.Soft) do THEME[k] = v end
 
+local FONT = { reg = Enum.Font.GothamMedium, bold = Enum.Font.GothamBold }
+local FONTSETS, FONT_NAMES = {}, {}
+for _, def in ipairs({
+    { "Gotham", "GothamMedium", "GothamBold" }, { "Source Sans", "SourceSans", "SourceSansBold" },
+    { "Roboto", "Roboto", "Roboto" }, { "Nunito", "Nunito", "Nunito" }, { "Ubuntu", "Ubuntu", "Ubuntu" },
+    { "Oswald", "Oswald", "Oswald" }, { "Jura", "Jura", "Jura" }, { "Titillium", "TitilliumWeb", "TitilliumWeb" },
+    { "Fredoka", "FredokaOne", "FredokaOne" }, { "Código", "Code", "Code" }, { "Arial", "Arial", "ArialBold" },
+}) do
+    local okA, reg = pcall(function() return Enum.Font[def[2]] end)
+    local okB, bold = pcall(function() return Enum.Font[def[3]] end)
+    if okA and okB and reg and bold then
+        FONTSETS[def[1]] = { reg, bold }
+        table.insert(FONT_NAMES, def[1])
+    end
+end
+local animLevel = 2
+local gradMode = "Automático"
+local radiusExtra = 0
+local custom = { accent = nil, bg = nil, border = nil }
+local DEFAULT_ACCENT = Color3.fromRGB(168, 120, 255)
+
 local function new(class, props, parent)
     local o = Instance.new(class)
     for k, v in pairs(props or {}) do o[k] = v end
+    if props and props.Font == FONT.bold then o:SetAttribute("sfb", true) end
     if parent then o.Parent = parent end
     return o
 end
@@ -197,13 +219,17 @@ local function pad(o, l, t, r, b)
 end
 local function label(props, parent)
     props.BackgroundTransparency = 1
-    props.Font = props.Font or Enum.Font.GothamMedium
+    props.Font = props.Font or FONT.reg
     props.TextColor3 = props.TextColor3 or THEME.text
     props.TextSize = props.TextSize or 13
     props.TextXAlignment = props.TextXAlignment or Enum.TextXAlignment.Left
     return new("TextLabel", props, parent)
 end
 local function tween(inst, goal, t)
+    if animLevel == 0 then
+        for k, v in pairs(goal) do inst[k] = v end
+        return
+    end
     TweenService:Create(inst, TweenInfo.new(t or 0.12), goal):Play()
 end
 local function isPress(input)
@@ -291,15 +317,23 @@ local function lineStroke(o)
     table.insert(lineStrokes, stroke)
     return stroke
 end
+local gradients = {}
 local function cornerStyle(obj, clean, soft)
     local corner = obj:FindFirstChildOfClass("UICorner")
     if corner then
-        onStyle(function(s) corner.CornerRadius = UDim.new(0, s and soft or clean) end)
+        onStyle(function(sf) corner.CornerRadius = UDim.new(0, math.max((sf and soft or clean) + radiusExtra, 2)) end)
     end
 end
+local function gradientsOn()
+    if gradMode == "Gradiente" then return true end
+    if gradMode == "Sólido" then return false end
+    return isSoft
+end
 local function gradient(frame, c0, c1, rotation)
-    local g = new("UIGradient", { Color = ColorSequence.new(c0, c1), Rotation = rotation or 90 }, frame)
-    onStyle(function(s) g.Enabled = s end)
+    local g = new("UIGradient", {
+        Color = ColorSequence.new(c0, c1), Rotation = rotation or 90, Enabled = gradientsOn(),
+    }, frame)
+    table.insert(gradients, g)
     return g
 end
 
@@ -310,15 +344,84 @@ function UI.setTransparency(percent)
     end
     if UI.refreshNav then UI.refreshNav() end
 end
-function UI.setStyle(name)
-    isSoft = (name == "Soft")
+local function applyPalette()
     for k, v in pairs(PALETTE[isSoft and "Soft" or "Clean"]) do THEME[k] = v end
+    if custom.bg then
+        local bg = custom.bg
+        THEME.bg = bg
+        THEME.side = bg:Lerp(rgb(255, 255, 255), 0.04)
+        THEME.card = bg:Lerp(rgb(255, 255, 255), 0.08)
+        THEME.field = bg:Lerp(rgb(0, 0, 0), 0.3)
+        THEME.btn = bg:Lerp(rgb(255, 255, 255), 0.16)
+    end
+    if custom.border then THEME.line = custom.border end
+end
+local function refreshSurfaces()
     for _, item in ipairs(surfaces) do
         if item.frame.Parent then item.frame.BackgroundColor3 = THEME[item.key] end
     end
     for _, stroke in ipairs(lineStrokes) do stroke.Color = THEME.line end
+    local on = gradientsOn()
+    for _, g in ipairs(gradients) do
+        if g.Parent then g.Enabled = on end
+    end
     for _, fn in ipairs(styleHooks) do pcall(fn, isSoft) end
 end
+function UI.setStyle(name)
+    isSoft = (name == "Soft")
+    applyPalette()
+    refreshSurfaces()
+end
+function UI.setBackground(color)
+    custom.bg = color
+    applyPalette()
+    refreshSurfaces()
+end
+function UI.setBorder(color)
+    custom.border = color
+    applyPalette()
+    refreshSurfaces()
+end
+function UI.setGradient(mode)
+    gradMode = mode
+    refreshSurfaces()
+end
+function UI.setRadius(value)
+    radiusExtra = (tonumber(value) or 8) - 8
+    refreshSurfaces()
+end
+function UI.setAccent(color)
+    local old = THEME.accent
+    custom.accent = color
+    local new_ = color or DEFAULT_ACCENT
+    THEME.accent = new_
+    if old ~= new_ then
+        for _, d in ipairs(gui:GetDescendants()) do
+            pcall(function()
+                if d:IsA("GuiObject") and d.BackgroundColor3 == old then d.BackgroundColor3 = new_ end
+                if (d:IsA("TextLabel") or d:IsA("TextButton") or d:IsA("TextBox")) and d.TextColor3 == old then
+                    d.TextColor3 = new_
+                end
+                if d:IsA("UIStroke") and d.Color == old then d.Color = new_ end
+            end)
+        end
+    end
+    refreshSurfaces()
+end
+function UI.setFont(name)
+    local set = FONTSETS[name]
+    if not set then return end
+    FONT.reg, FONT.bold = set[1], set[2]
+    for _, d in ipairs(gui:GetDescendants()) do
+        if d:IsA("TextLabel") or d:IsA("TextButton") or d:IsA("TextBox") then
+            d.Font = d:GetAttribute("sfb") and FONT.bold or FONT.reg
+        end
+    end
+end
+function UI.setAnim(mode)
+    animLevel = (mode == "Desligadas") and 0 or (mode == "Suaves") and 1 or 2
+end
+UI.fontNames = FONT_NAMES
 
 local function makeDraggable(target, handle, onTap)
     local dragging, moved, dragStart, startPos = false, false, nil, nil
@@ -373,15 +476,51 @@ for _, cfg in ipairs({ { 5, 0.78 }, { 10, 0.88 }, { 16, 0.94 } }) do
     outline(ring, THEME.accent, cfg[1]).Transparency = cfg[2]
     table.insert(glowRings, ring)
 end
-onStyle(function(s)
-    winGlow.Enabled = s
-    for _, ring in ipairs(glowRings) do ring.Visible = s end
+onStyle(function(sf)
+    local c = custom.border or THEME.accent
+    winStroke.Color = c
+    winGlow.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, c),
+        ColorSequenceKeypoint.new(0.5, custom.border and c or rgb(236, 120, 255)),
+        ColorSequenceKeypoint.new(1, c),
+    })
+    winGlow.Enabled = sf
+    for _, ring in ipairs(glowRings) do ring.Visible = sf end
 end)
-STATE.connect(RunService.Heartbeat, function()
-    if isSoft and win.Visible then winGlow.Rotation = (os.clock() * 40) % 360 end
+local glowClock = 0
+STATE.connect(RunService.Heartbeat, function(dt)
+    glowClock += dt
+    if glowClock < 0.04 then return end
+    glowClock = 0
+    if animLevel == 2 and isSoft and win.Visible then winGlow.Rotation = (os.clock() * 40) % 360 end
 end)
 new("UISizeConstraint", { MinSize = Vector2.new(460, 280), MaxSize = Vector2.new(820, 500) }, win)
 local winScale = new("UIScale", { Scale = 1 }, win)
+local uiScaleValue = 1
+local winOpen = true
+local function showWindow(on)
+    winOpen = on
+    if animLevel == 0 then
+        win.Visible = on
+        winScale.Scale = uiScaleValue
+        return
+    end
+    if on then
+        winScale.Scale = uiScaleValue * 0.9
+        win.Visible = true
+        TweenService:Create(winScale, TweenInfo.new(0.22, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+            { Scale = uiScaleValue }):Play()
+    else
+        TweenService:Create(winScale, TweenInfo.new(0.14), { Scale = uiScaleValue * 0.92 }):Play()
+        task.delay(0.15, function()
+            if not winOpen then
+                win.Visible = false
+                winScale.Scale = uiScaleValue
+            end
+        end)
+    end
+end
+function UI.toggle() showWindow(not winOpen) end
 
 local side = new("Frame", {
     Size = UDim2.new(0, SIDE_W, 1, 0), BackgroundColor3 = THEME.side, BorderSizePixel = 0,
@@ -407,11 +546,11 @@ new("UIGradient", {
 }, sideEdge)
 onStyle(function(s) sideEdge.Visible = s end)
 label({
-    Text = "ScyFe Visuals", Font = Enum.Font.GothamBold, TextSize = 14, TextColor3 = THEME.accent,
+    Text = "ScyFe Visuals", Font = FONT.bold, TextSize = 14, TextColor3 = THEME.accent,
     Position = UDim2.new(0, 12, 0, 12), Size = UDim2.new(1, -16, 0, 18),
 }, side)
 label({
-    Text = "Volleyball Legends", TextSize = 10, TextColor3 = THEME.sub,
+    Text = "Volleyball Legends  •  v1.0", TextSize = 10, TextColor3 = THEME.sub,
     Position = UDim2.new(0, 12, 0, 30), Size = UDim2.new(1, -16, 0, 14),
 }, side)
 local hint = label({
@@ -435,13 +574,13 @@ local header = new("Frame", {
 }, main)
 local titleKey = ""
 local titleLabel = label({
-    Text = "", Font = Enum.Font.GothamBold, TextSize = 15, TextTruncate = Enum.TextTruncate.AtEnd,
+    Text = "", Font = FONT.bold, TextSize = 15, TextTruncate = Enum.TextTruncate.AtEnd,
     Position = UDim2.new(0, 14, 0, 0), Size = UDim2.new(0, 100, 1, 0),
 }, header)
 
 local function headerButton(text, fromRight)
     local b = new("TextButton", {
-        Text = text, Font = Enum.Font.GothamBold, TextSize = 14, TextColor3 = THEME.sub,
+        Text = text, Font = FONT.bold, TextSize = 14, TextColor3 = THEME.sub,
         Size = UDim2.new(0, 28, 0, 28), Position = UDim2.new(1, fromRight, 0, 8),
         BackgroundColor3 = THEME.btn, AutoButtonColor = false,
     }, header)
@@ -451,11 +590,11 @@ local function headerButton(text, fromRight)
 end
 local closeBtn = headerButton("X", -36)
 local minBtn = headerButton("-", -68)
-closeBtn.Activated:Connect(function() win.Visible = false end)
+closeBtn.Activated:Connect(function() showWindow(false) end)
 
 local searchBox = new("TextBox", {
     Text = "", PlaceholderColor3 = THEME.sub, TextColor3 = THEME.text,
-    Font = Enum.Font.GothamMedium, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left,
+    Font = FONT.reg, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left,
     ClearTextOnFocus = false, Position = UDim2.new(0, 118, 0, 8), Size = UDim2.new(1, -196, 0, 28),
     BackgroundColor3 = THEME.field,
 }, header)
@@ -493,20 +632,42 @@ end
 makeDraggable(win, header, nil)
 
 local pill = new("TextButton", {
-    Text = "ScyFe Visuals", Font = Enum.Font.GothamBold, TextSize = 13, TextColor3 = THEME.text,
+    Text = "ScyFe Visuals", Font = FONT.bold, TextSize = 13, TextColor3 = THEME.text,
     AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 54), Size = UDim2.new(0, 140, 0, 30),
     BackgroundColor3 = THEME.bg, AutoButtonColor = false,
 }, gui)
 round(pill, 15)
 skin(pill, "bg")
-outline(pill, THEME.accent, 2)
+local pillStroke = outline(pill, THEME.accent, 2)
+onStyle(function() pillStroke.Color = custom.border or THEME.accent end)
 local pillRing = new("Frame", { Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1 }, pill)
 round(pillRing, 15)
 outline(pillRing, THEME.accent, 5).Transparency = 0.8
 onStyle(function(s) pillRing.Visible = s end)
 
-function UI.toggle() win.Visible = not win.Visible end
 makeDraggable(pill, pill, UI.toggle)
+
+local bubble = new("TextButton", {
+    Text = "SV", Font = FONT.bold, TextSize = 15, TextColor3 = THEME.text,
+    AnchorPoint = Vector2.new(0.5, 0), Position = pill.Position, Size = UDim2.new(0, 46, 0, 46),
+    BackgroundColor3 = THEME.bg, AutoButtonColor = false, Visible = false,
+}, gui)
+round(bubble, 23)
+skin(bubble, "bg")
+gradient(bubble, rgb(255, 255, 255), rgb(215, 195, 255), 90)
+local bubbleStroke = outline(bubble, THEME.accent, 2)
+onStyle(function() bubbleStroke.Color = custom.border or THEME.accent end)
+local bubbleRing = new("Frame", { Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1 }, bubble)
+round(bubbleRing, 23)
+outline(bubbleRing, THEME.accent, 6).Transparency = 0.78
+onStyle(function(sf) bubbleRing.Visible = sf end)
+makeDraggable(bubble, bubble, UI.toggle)
+function UI.setOpener(mode)
+    local useBubble = (mode == "Bolha")
+    if useBubble then bubble.Position = pill.Position else pill.Position = bubble.Position end
+    pill.Visible = not useBubble
+    bubble.Visible = useBubble
+end
 
 local toast = new("Frame", {
     AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -12, 0, 96),
@@ -516,7 +677,7 @@ round(toast, 10)
 skin(toast, "bg")
 outline(toast, THEME.accent, 1)
 local toastTitle = label({
-    Text = "", Font = Enum.Font.GothamBold, TextSize = 13, TextColor3 = THEME.accent,
+    Text = "", Font = FONT.bold, TextSize = 13, TextColor3 = THEME.accent,
     Position = UDim2.new(0, 12, 0, 5), Size = UDim2.new(1, -24, 0, 16),
 }, toast)
 local toastBody = label({
@@ -547,7 +708,8 @@ function UI.setNotifySide(sideName)
     end
 end
 function UI.setScale(percent)
-    winScale.Scale = math.clamp((tonumber(percent) or 100) / 100, 0.5, 1.5)
+    uiScaleValue = math.clamp((tonumber(percent) or 100) / 100, 0.5, 1.5)
+    winScale.Scale = uiScaleValue
 end
 
 local KEYNAMES = {
@@ -565,7 +727,7 @@ local function makeHotkey(row, id, defaultKey, fn, rightOffset, alwaysShown, onR
     local plus
     if not alwaysShown then
         plus = new("TextButton", {
-            Text = "+", Font = Enum.Font.GothamBold, TextSize = 14, TextColor3 = THEME.accent,
+            Text = "+", Font = FONT.bold, TextSize = 14, TextColor3 = THEME.accent,
             Size = UDim2.new(0, 20, 0, 20), Position = UDim2.new(1, -(rightOffset + 20), 0.5, -10),
             BackgroundColor3 = THEME.btn, AutoButtonColor = false,
         }, row)
@@ -576,7 +738,7 @@ local function makeHotkey(row, id, defaultKey, fn, rightOffset, alwaysShown, onR
     local chipRight = alwaysShown and rightOffset or (rightOffset + 24)
     local chip = new("TextButton", {
         Size = UDim2.new(0, 54, 0, 22), Position = UDim2.new(1, -(chipRight + 54), 0.5, -11),
-        BackgroundColor3 = THEME.field, Text = "—", Font = Enum.Font.GothamMedium, TextSize = 11,
+        BackgroundColor3 = THEME.field, Text = "—", Font = FONT.reg, TextSize = 11,
         TextColor3 = THEME.sub, AutoButtonColor = false, Visible = shown,
     }, row)
     round(chip, 5)
@@ -648,7 +810,7 @@ end)
 
 function UI.floatButton(text, index, onTap)
     local b = new("TextButton", {
-        Text = text, Font = Enum.Font.GothamBold, TextSize = 13, TextColor3 = Color3.new(1, 1, 1),
+        Text = text, Font = FONT.bold, TextSize = 13, TextColor3 = Color3.new(1, 1, 1),
         Size = UDim2.new(0, 48, 0, 48), Position = UDim2.new(0.22, index * 56, 0.78, -24),
         BackgroundColor3 = THEME.accent, BackgroundTransparency = 0.15, AutoButtonColor = false,
         Visible = false,
@@ -695,7 +857,15 @@ function UI.select(name)
     currentTab = name
     for n, t in pairs(tabs) do
         local on = (n == name)
-        t.page.Visible = on and not searching
+        local show = on and not searching
+        if show and not t.page.Visible and animLevel >= 1 then
+            t.page.Position = UDim2.new(0, 0, 0, 12)
+            TweenService:Create(t.page, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+                { Position = UDim2.new(0, 0, 0, 0) }):Play()
+        elseif show then
+            t.page.Position = UDim2.new(0, 0, 0, 0)
+        end
+        t.page.Visible = show
         t.btn.BackgroundTransparency = on and transp or 1
         t.btn.TextColor3 = on and THEME.text or THEME.sub
         t.bar.Visible = on
@@ -764,7 +934,7 @@ function UI.tab(name, category)
             AutoButtonColor = false, LayoutOrder = cat.order,
         }, nav)
         local headLabel = label({
-            Font = Enum.Font.GothamBold, TextSize = 12, TextColor3 = THEME.sub,
+            Font = FONT.bold, TextSize = 12, TextColor3 = THEME.sub,
             Position = UDim2.new(0, 10, 0, 0), Size = UDim2.new(1, -34, 1, 0),
         }, headBtn)
         reg(headLabel, category)
@@ -790,7 +960,7 @@ function UI.tab(name, category)
     pad(holder, 0, 0, 0, 12)
 
     local btn = new("TextButton", {
-        Text = "", Font = Enum.Font.GothamMedium, TextSize = 13, TextColor3 = THEME.sub,
+        Text = "", Font = FONT.reg, TextSize = 13, TextColor3 = THEME.sub,
         TextXAlignment = Enum.TextXAlignment.Left, Size = UDim2.new(1, 0, 0, 30),
         BackgroundColor3 = THEME.btn, BackgroundTransparency = 1, AutoButtonColor = false,
         LayoutOrder = cat.order + #cat.items + 1, Visible = cat.open,
@@ -841,6 +1011,12 @@ function G:_row(height, title, desc)
     skin(row, "card")
     gradient(row, rgb(255, 255, 255), rgb(225, 205, 255), 90)
     pad(row, 12, 5, 12, 5)
+    row.MouseEnter:Connect(function()
+        if animLevel >= 2 then tween(row, { BackgroundColor3 = THEME.card:Lerp(rgb(255, 255, 255), 0.06) }, 0.12) end
+    end)
+    row.MouseLeave:Connect(function()
+        if animLevel >= 2 then tween(row, { BackgroundColor3 = THEME.card }, 0.12) end
+    end)
     table.insert(rowsReg, { row = row, page = self.card, text = both(title) .. " " .. both(desc) })
     return row
 end
@@ -893,6 +1069,26 @@ function G:note(text)
         end
     end
     return obj
+end
+
+function G:text(text)
+    self.n += 1
+    local row = new("Frame", {
+        Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundColor3 = THEME.card,
+        BorderSizePixel = 0, LayoutOrder = self.base + self.n,
+    }, self.card)
+    round(row, 8)
+    cornerStyle(row, 8, 10)
+    lineStroke(row)
+    skin(row, "card")
+    gradient(row, rgb(255, 255, 255), rgb(225, 205, 255), 90)
+    pad(row, 12, 8, 12, 8)
+    local l = label({
+        Text = text, TextSize = 12, TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top,
+        AutomaticSize = Enum.AutomaticSize.Y, Size = UDim2.new(1, 0, 0, 0),
+    }, row)
+    table.insert(rowsReg, { row = row, page = self.card, text = string.lower(text) })
+    return l
 end
 
 function G:toggle(o)
@@ -976,7 +1172,7 @@ function G:input(o)
     rowText(row, o.Title, o.Desc, 160)
     local box = new("TextBox", {
         Text = tostring(o.Value or ""), PlaceholderText = o.Placeholder or "", PlaceholderColor3 = THEME.sub,
-        TextColor3 = THEME.text, Font = Enum.Font.GothamMedium, TextSize = 12,
+        TextColor3 = THEME.text, Font = FONT.reg, TextSize = 12,
         TextXAlignment = Enum.TextXAlignment.Left, ClearTextOnFocus = false,
         Size = UDim2.new(0, 150, 0, 26), Position = UDim2.new(1, -150, 0.5, -13),
         BackgroundColor3 = THEME.field,
@@ -1017,7 +1213,7 @@ function G:slider(o)
     local value = min
 
     local valueBox = new("TextBox", {
-        Text = "", Font = Enum.Font.GothamMedium, TextSize = 11, TextColor3 = THEME.accent,
+        Text = "", Font = FONT.reg, TextSize = 11, TextColor3 = THEME.accent,
         Size = UDim2.new(0, 54, 0, 18), Position = UDim2.new(1, -54, 0, 0),
         BackgroundColor3 = THEME.field, ClearTextOnFocus = false,
     }, row)
@@ -1138,7 +1334,7 @@ function G:dropdown(o)
 
     local search = new("TextBox", {
         Text = "", PlaceholderColor3 = THEME.sub, TextColor3 = THEME.text,
-        Font = Enum.Font.GothamMedium, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left,
+        Font = FONT.reg, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left,
         ClearTextOnFocus = false, Position = UDim2.new(0, 0, 0, topH + 8), Size = UDim2.new(1, 0, 0, 26),
         BackgroundColor3 = THEME.field, Visible = false,
     }, row)
@@ -1215,7 +1411,7 @@ function G:dropdown(o)
             round(frame, 5)
             track(frame)
             local nameBtn = new("TextButton", {
-                Text = tr(name), Font = Enum.Font.GothamMedium, TextSize = 12, TextColor3 = THEME.text,
+                Text = tr(name), Font = FONT.reg, TextSize = 12, TextColor3 = THEME.text,
                 TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd,
                 Size = UDim2.new(1, o.Favorites and -26 or 0, 1, 0), BackgroundTransparency = 1,
                 AutoButtonColor = false,
@@ -1228,7 +1424,7 @@ function G:dropdown(o)
             local star
             if o.Favorites then
                 star = new("TextButton", {
-                    Text = "☆", Font = Enum.Font.GothamBold, TextSize = 15, TextColor3 = THEME.sub,
+                    Text = "☆", Font = FONT.bold, TextSize = 15, TextColor3 = THEME.sub,
                     Size = UDim2.new(0, 24, 1, 0), Position = UDim2.new(1, -24, 0, 0),
                     BackgroundTransparency = 1, AutoButtonColor = false,
                 }, frame)
@@ -1360,7 +1556,7 @@ function G:weights(o)
                 Size = UDim2.new(1, -96, 1, 0),
             }, f)
             local box = new("TextBox", {
-                Text = tostring(e.pct), Font = Enum.Font.GothamMedium, TextSize = 11, TextColor3 = THEME.accent,
+                Text = tostring(e.pct), Font = FONT.reg, TextSize = 11, TextColor3 = THEME.accent,
                 Size = UDim2.new(0, 46, 0, 20), Position = UDim2.new(1, -88, 0.5, -10),
                 BackgroundColor3 = THEME.field, ClearTextOnFocus = false,
             }, f)
@@ -1372,7 +1568,7 @@ function G:weights(o)
                 Position = UDim2.new(1, -40, 0, 0), Size = UDim2.new(0, 12, 1, 0),
             }, f)
             local rm = new("TextButton", {
-                Text = "-", Font = Enum.Font.GothamBold, TextSize = 14, TextColor3 = THEME.warn,
+                Text = "-", Font = FONT.bold, TextSize = 14, TextColor3 = THEME.warn,
                 Size = UDim2.new(0, 22, 0, 20), Position = UDim2.new(1, -22, 0.5, -10),
                 BackgroundColor3 = THEME.btn, AutoButtonColor = false,
             }, f)
@@ -1621,24 +1817,36 @@ local function fxFire(position)
     FX.hit = false
 end
 
-if HitGround then
-    STATE.connect(HitGround.OnClientEvent, function(...)
-        if FX.selfFiring then return end
-        FX.hit = hitIsMine(table.pack(...))
-        FX.hitAt = os.clock()
-    end)
-    STATE.connect(workspace.DescendantAdded, function(d)
-        if d.Name == "HitIndicator" and d:IsA("BasePart") and d.Color == Color3.fromRGB(0, 255, 0) then
-            fxFire(d.Position)
-        end
-    end)
-    STATE.connect(workspace.DescendantRemoving, function(d)
-        if d.Name == "HitIndicator" then
-            FX.busy = false
-            FX.hit = false
-        end
-    end)
+local fxConns = {}
+local function fxUpdate()
+    local want = (Cfg.EffectOn or Cfg.EffectRandom) and HitGround ~= nil
+    if want and #fxConns == 0 then
+        fxConns[1] = HitGround.OnClientEvent:Connect(function(...)
+            if FX.selfFiring then return end
+            FX.hit = hitIsMine(table.pack(...))
+            FX.hitAt = os.clock()
+        end)
+        fxConns[2] = workspace.DescendantAdded:Connect(function(d)
+            if d.Name == "HitIndicator" and d:IsA("BasePart") and d.Color == Color3.fromRGB(0, 255, 0) then
+                fxFire(d.Position)
+            end
+        end)
+        fxConns[3] = workspace.DescendantRemoving:Connect(function(d)
+            if d.Name == "HitIndicator" then
+                FX.busy = false
+                FX.hit = false
+            end
+        end)
+    elseif not want and #fxConns > 0 then
+        for _, c in ipairs(fxConns) do c:Disconnect() end
+        fxConns = {}
+        FX.hit, FX.busy = false, false
+    end
 end
+STATE.onCleanup(function()
+    for _, c in ipairs(fxConns) do c:Disconnect() end
+    fxConns = {}
+end)
 
 local Prot = { notif = {}, loop = nil, char = nil, last = 0 }
 
@@ -2111,17 +2319,33 @@ STATE.connect(workspace.ChildAdded, function(child)
         hbApply()
     end
 end)
-STATE.connect(RunService.RenderStepped, function()
-    if not HB.on then return end
-    for _, m in ipairs(workspace:GetChildren()) do
-        if isBallModel(m) then
-            local p = m:FindFirstChild(HB.name)
-            local base = p and firstBallPart(m, HB.name)
-            if p and base then p.CFrame = base.CFrame end
-        end
+local hbConn
+local function hbSet(on)
+    HB.on = on
+    if hbConn then hbConn:Disconnect() hbConn = nil end
+    if on then
+        local cache, last = {}, 0
+        hbConn = RunService.RenderStepped:Connect(function()
+            local now = os.clock()
+            if now - last > 0.2 then
+                last = now
+                cache = {}
+                for _, m in ipairs(workspace:GetChildren()) do
+                    if isBallModel(m) then cache[#cache + 1] = m end
+                end
+            end
+            for _, m in ipairs(cache) do
+                local p = m.Parent and m:FindFirstChild(HB.name)
+                local base = p and firstBallPart(m, HB.name)
+                if p and base then p.CFrame = base.CFrame end
+            end
+        end)
+        hbApply()
+    else
+        hbRemove()
     end
-end)
-STATE.onCleanup(hbRemove)
+end
+STATE.onCleanup(function() hbSet(false) end)
 
 local AL = { saved = {}, conn = nil, ql = nil, sql = nil, token = 0 }
 
@@ -2506,20 +2730,31 @@ function PR.predict(part)
     return land, Physics, t, PR.netHit(pos, vel, g, t)
 end
 
+local ballCache, ballCacheAt = {}, 0
 local function nearestBallPart()
     local char = LP.Character
     local root = char and char:FindFirstChild("HumanoidRootPart")
     if not root then return nil end
-    local best, bestDist = nil, math.huge
-    for _, m in ipairs(workspace:GetChildren()) do
-        if isBallModel(m) then
-            for _, d in ipairs(m:GetDescendants()) do
-                if d:IsA("BasePart") then
-                    local dist = (d.Position - root.Position).Magnitude
-                    if dist < bestDist then best, bestDist = d, dist end
-                    break
+    local now = os.clock()
+    if now - ballCacheAt > 0.25 then
+        ballCacheAt = now
+        ballCache = {}
+        for _, m in ipairs(workspace:GetChildren()) do
+            if isBallModel(m) then
+                for _, d in ipairs(m:GetDescendants()) do
+                    if d:IsA("BasePart") then
+                        table.insert(ballCache, d)
+                        break
+                    end
                 end
             end
+        end
+    end
+    local best, bestDist = nil, math.huge
+    for _, p in ipairs(ballCache) do
+        if p.Parent then
+            local dist = (p.Position - root.Position).Magnitude
+            if dist < bestDist then best, bestDist = p, dist end
         end
     end
     return best
@@ -2806,12 +3041,12 @@ UI.EN = {
     ["Carga Máxima do Especial"] = "Max Special Charge", ["Seu especial sai sempre com carga cheia."] = "Your special always comes out fully charged.",
     ["Saque Máximo"] = "Max Serve", ["Saque com a potência máxima."] = "Serve with maximum power.",
     ["Pés de Chumbo"] = "Lead Feet", ["Mostra um botão LF pra cair rápido no ar."] = "Shows an LF button to drop fast in the air.",
-    ["Tecla do Pés de Chumbo"] = "Lead Feet Key", ["Tecla que ativa a queda (com o recurso ligado)."] = "Key that triggers the drop (feature on).",
+    ["Tecla dos Pés de Chumbo"] = "Lead Feet Key", ["Tecla que ativa a queda (com o recurso ligado)."] = "Key that triggers the drop (feature on).",
     ["ESP de Pulo"] = "Jump ESP", ["Destaca inimigos enquanto pulam."] = "Highlights enemies while they jump.",
     ["Anti-Lag"] = "Anti-Lag", ["Reduz os gráficos pra rodar mais leve."] = "Lowers graphics to run lighter.",
     ["Shift Lock Automático"] = "Auto Shift Lock", ["Vira o personagem pra câmera ao pular."] = "Turns the character toward the camera on jump.",
-    ["Desativar Camera Shake"] = "Disable Camera Shake", ["Remove o tremor de câmera do jogo."] = "Removes the game's camera shake.",
-    ["Efeito de ponto"] = "Score effect", ["Pesquise ou favorite com a estrela."] = "Search or favorite with the star.",
+    ["Desativar Tremor de Câmera"] = "Disable Camera Shake", ["Remove o tremor de câmera do jogo."] = "Removes the game's camera shake.",
+    ["Efeito escolhido"] = "Score effect", ["Pesquise ou favorite com a estrela."] = "Search or favorite with the star.",
     ["Trocar Efeito de Ponto"] = "Change Score Effect", ["Troca o efeito do seu ponto (só pra você)."] = "Changes your point effect (client-side).",
     ["Efeito Aleatório"] = "Random Effect", ["Sorteia um efeito a cada ponto (usa a lista)."] = "Picks an effect each point (uses the list).",
     ["Adicionar à lista"] = "Add to list", ["Escolha um efeito pra entrar no sorteio."] = "Pick an effect to join the draw.",
@@ -2826,7 +3061,7 @@ UI.EN = {
     ["Card Aleatório"] = "Random Card", ["Sorteia um card a cada ponto."] = "Picks a card each point.",
     ["Testar Card"] = "Test Card", ["Mostra o card agora."] = "Shows the card now.",
     ["Coletar Missões"] = "Claim Quests", ["Resgata as recompensas de missões prontas."] = "Claims ready quest rewards.",
-    ["Coletar Recompensas de Nível"] = "Claim Level Rewards", ["Resgata as de nível disponíveis."] = "Claims available level rewards.",
+    ["Coletar Recompensas de Nível"] = "Claim Level Rewards", ["Resgata as recompensas de nível disponíveis."] = "Claims available level rewards.",
     ["Resgatar Todos os Códigos"] = "Redeem All Codes", ["Busca códigos novos e resgata (até 3)."] = "Fetches new codes and redeems (up to 3).",
     ["Português"] = "Português", ["English"] = "English", ["Escolha o idioma da interface."] = "Choose the interface language.",
     ["Custom Protect"] = "Custom Protect", ["Nome"] = "Name", ["Aparece no lugar do seu nome real."] = "Shown instead of your real name.",
@@ -2843,11 +3078,35 @@ UI.EN = {
     ["Marcação, Marcação + tempo ou Completo (dentro/fora/rede)."] = "Marker, Marker + time or Full (in/out/net).",
     ["Marcação"] = "Marker", ["Marcação + tempo"] = "Marker + time", ["Completo"] = "Full",
     ["Tamanho da marcação"] = "Marker size", ["Tamanho do círculo no chão."] = "Size of the ground circle.",
+    ["Tremor de Câmera"] = "Camera Shake",
+    ["Aparência"] = "Appearance", ["Sobre"] = "About", ["Log de alterações"] = "Changelog",
+    ["Cores"] = "Colors", ["Estilo e fundo"] = "Style & background", ["Comunidade"] = "Community",
+    ["Cor de destaque"] = "Accent color", ["Cor principal dos botões e detalhes."] = "Main color of buttons and details.",
+    ["Destaque personalizado (hex)"] = "Custom accent (hex)", ["Ex.: #A878FF. Vazio usa a cor acima."] = "E.g. #A878FF. Empty uses the color above.",
+    ["Cor de fundo"] = "Background color", ["Cor base do painel."] = "Base color of the panel.",
+    ["Fundo personalizado (hex)"] = "Custom background (hex)",
+    ["Cor das bordas"] = "Border color", ["Contorno da janela e dos cards."] = "Outline of the window and cards.",
+    ["Bordas personalizadas (hex)"] = "Custom borders (hex)",
+    ["Fundo"] = "Background", ["Sólido, gradiente ou automático (segue o estilo)."] = "Solid, gradient or automatic (follows the style).",
+    ["Automático"] = "Automatic", ["Sólido"] = "Solid", ["Gradiente"] = "Gradient",
+    ["Arredondamento"] = "Roundness", ["Raio dos cantos dos cards."] = "Corner radius of the cards.",
+    ["Fonte"] = "Font", ["Fonte usada em toda a GUI."] = "Font used across the GUI.",
+    ["Animações"] = "Animations", ["Desligadas, Suaves ou Completas (com brilho e hover)."] = "Off, Smooth or Full (with glow and hover).",
+    ["Desligadas"] = "Off", ["Suaves"] = "Smooth", ["Completas"] = "Full",
+    ["Botão de abrir"] = "Open button", ["Como abrir o painel: pílula ou bolha."] = "How to open the panel: pill or bubble.",
+    ["Pílula"] = "Pill", ["Bolha"] = "Bubble",
+    ["Padrão"] = "Default", ["Grafite"] = "Graphite", ["Roxo escuro"] = "Dark purple", ["Azul escuro"] = "Dark blue",
+    ["Verde escuro"] = "Dark green", ["Vinho"] = "Wine", ["Preto puro"] = "Pure black", ["Cinza"] = "Gray",
+    ["Preto"] = "Black", ["Ciano"] = "Cyan",
+    ["Entrar no Discord"] = "Join Discord", ["Copia o convite e tenta abrir o Discord."] = "Copies the invite and tries to open Discord.",
+    ["Convite copiado: %s"] = "Invite copied: %s", ["Não consegui copiar. Convite: %s"] = "Couldn't copy. Invite: %s",
+    ["Adicionado"] = "Added", ["Alterado"] = "Changed", ["Modificado"] = "Modified", ["Excluído"] = "Removed", ["Corrigido"] = "Fixed",
+    ["Versão 1.0"] = "Version 1.0",
     ["Estilo da GUI"] = "GUI style", ["Clean: simples. Soft: brilho e degradê."] = "Clean: simple. Soft: glow and gradient.",
     ["Tecla do painel"] = "Panel key", ["Toque na caixa e aperte a tecla."] = "Tap the box and press a key.",
     ["Descarregar Script"] = "Unload Script", ["Desfaz tudo e fecha o menu."] = "Undoes everything and closes the menu.",
     ["Nome da config"] = "Config name", ["Nome pra criar uma config."] = "Name to create a config.",
-    ["Configs salvas"] = "Saved configs", ["Pesquise ou escolha uma."] = "Search or pick one.",
+    ["Config escolhida"] = "Saved configs", ["Pesquise ou escolha uma."] = "Search or pick one.",
     ["Criar"] = "Create", ["Salva as opções atuais com o nome digitado."] = "Saves current options under the typed name.",
     ["Carregar"] = "Load", ["Aplica a config escolhida."] = "Applies the chosen config.",
     ["Sobrescrever"] = "Overwrite", ["Atualiza a escolhida com as opções atuais."] = "Updates the chosen one with current options.",
@@ -2871,7 +3130,7 @@ UI.EN = {
     ["nenhum"] = "none", ["Já está na lista."] = "Already in the list.",
     ["Carregado. Toque na pílula pra abrir/fechar."] = "Loaded. Tap the pill to open/close.",
     ["Aleatória: %s"] = "Random: %s", ["Aleatório: %s"] = "Random: %s", ["Nome: %s"] = "Name: %s",
-    ["Camera Shake: %d módulo(s) tratado(s)."] = "Camera Shake: %d module(s) handled.",
+    ["Tremor de câmera: %d módulo(s) tratado(s)."] = "Camera Shake: %d module(s) handled.",
 }
 
 local effectWeights = nil
@@ -2890,8 +3149,7 @@ gHit:toggle({
     Title = "Hitbox da Bola", Desc = "Cria uma esfera de alcance em volta da bola.",
     Id = "hb_on", Hotkey = true,
     Callback = function(v)
-        HB.on = v
-        if v then hbApply() else hbRemove() end
+        hbSet(v)
     end,
 })
 gHit:slider({
@@ -2947,7 +3205,7 @@ gMove:toggle({
     end,
 })
 gMove:keybind({
-    Title = "Tecla do Pés de Chumbo", Desc = "Tecla que ativa a queda (com o recurso ligado).",
+    Title = "Tecla dos Pés de Chumbo", Desc = "Tecla que ativa a queda (com o recurso ligado).",
     Id = "leadfeet_act", Key = "G", Callback = leadFeet,
 })
 gMove:toggle({
@@ -2993,9 +3251,9 @@ gChar:toggle({
     Id = "autoshift", Hotkey = true,
     Callback = function(v) slSet(v) end,
 })
-local gCam = Personagem.Camera:group("Camera Shake")
+local gCam = Personagem.Camera:group("Tremor de Câmera")
 gCam:toggle({
-    Title = "Desativar Camera Shake", Desc = "Remove o tremor de câmera do jogo.",
+    Title = "Desativar Tremor de Câmera", Desc = "Remove o tremor de câmera do jogo.",
     Id = "noshake", Hotkey = true,
     Callback = function(v)
         csSet(v)
@@ -3003,7 +3261,7 @@ gCam:toggle({
             task.delay(0.5, function()
                 local n = 0
                 for _ in pairs(CS.patched) do n += 1 end
-                notify("Câmera", UI.trf("Camera Shake: %d módulo(s) tratado(s).", n))
+                notify("Câmera", UI.trf("Tremor de câmera: %d módulo(s) tratado(s).", n))
             end)
         end
     end,
@@ -3017,19 +3275,25 @@ local Visuais = {
 
 local gFx = Visuais.Efeitos:group("Efeito de Ponto")
 gFx:dropdown({
-    Title = "Efeito de ponto", Desc = "Pesquise ou favorite com a estrela.",
+    Title = "Efeito escolhido", Desc = "Pesquise ou favorite com a estrela.",
     Id = "fx_sel", Options = effects, Value = Cfg.Effect, Favorites = true,
     Callback = function(v) Cfg.Effect = v end,
 })
 gFx:toggle({
     Title = "Trocar Efeito de Ponto", Desc = "Troca o efeito do seu ponto (só pra você).",
     Id = "fx_on", Hotkey = true,
-    Callback = function(v) Cfg.EffectOn = v end,
+    Callback = function(v)
+        Cfg.EffectOn = v
+        fxUpdate()
+    end,
 })
 gFx:toggle({
     Title = "Efeito Aleatório", Desc = "Sorteia um efeito a cada ponto (usa a lista).",
     Id = "fx_rand", Hotkey = true,
-    Callback = function(v) Cfg.EffectRandom = v end,
+    Callback = function(v)
+        Cfg.EffectRandom = v
+        fxUpdate()
+    end,
 })
 
 local gList = Visuais.Efeitos:group("Lista de Efeitos (sorteio)")
@@ -3158,7 +3422,7 @@ gRew:button({
     Callback = claimQuests,
 })
 gRew:button({
-    Title = "Coletar Recompensas de Nível", Desc = "Resgata as de nível disponíveis.",
+    Title = "Coletar Recompensas de Nível", Desc = "Resgata as recompensas de nível disponíveis.",
     Callback = claimLevel,
 })
 gRew:button({
@@ -3194,30 +3458,136 @@ gProt:toggle({
 })
 
 local Config = {
+    Aparencia = UI.tab("Aparência", "Config"),
     Menu = UI.tab("Menu", "Config"),
     Salvas = UI.tab("Configs Salvas", "Config"),
 }
-local gMenu = Config.Menu:group("Menu")
-gMenu:dropdown({
-    Title = "Lado das notificações", Desc = "Onde os avisos aparecem.",
-    Id = "ui_side", Options = { "Esquerda", "Centro", "Direita" }, Value = "Direita",
-    Callback = function(v) UI.setNotifySide(v) end,
+local Sobre = UI.tab("Log de alterações", "Sobre")
+
+local function parseHex(text)
+    local h = tostring(text or ""):gsub("[#%s]", "")
+    if #h == 3 then h = h:gsub(".", "%0%0") end
+    if not h:match("^%x%x%x%x%x%x$") then return nil end
+    return Color3.fromRGB(tonumber(h:sub(1, 2), 16), tonumber(h:sub(3, 4), 16), tonumber(h:sub(5, 6), 16))
+end
+
+local ACCENTS = {
+    Roxo = "#A878FF", Azul = "#5A96FF", Ciano = "#46D2E6", Verde = "#50DC82", Rosa = "#FF78C8",
+    Vermelho = "#FF5A64", Laranja = "#FFA046", Amarelo = "#FFD750", Branco = "#F0F0F5",
+}
+local BACKGROUNDS = {
+    Grafite = "#16161A", ["Roxo escuro"] = "#140C24", ["Azul escuro"] = "#0A1020", ["Verde escuro"] = "#08160F",
+    Vinho = "#1C0A12", ["Preto puro"] = "#000000",
+}
+local BORDERS = { Roxo = "#A878FF", Branco = "#FFFFFF", Cinza = "#555560", Preto = "#000000", Azul = "#5A96FF", Rosa = "#FF78C8" }
+
+local chosen = { accent = "Roxo", accentHex = "", bg = "Padrão", bgHex = "", border = "Padrão", borderHex = "" }
+local function applyColors()
+    UI.setAccent(parseHex(chosen.accentHex) or parseHex(ACCENTS[chosen.accent]))
+    UI.setBackground(parseHex(chosen.bgHex) or parseHex(BACKGROUNDS[chosen.bg] or ""))
+    UI.setBorder(parseHex(chosen.borderHex) or parseHex(BORDERS[chosen.border] or ""))
+end
+
+local gColors = Config.Aparencia:group("Cores")
+gColors:dropdown({
+    Title = "Cor de destaque", Desc = "Cor principal dos botões e detalhes.",
+    Id = "ui_accent", Options = { "Roxo", "Azul", "Ciano", "Verde", "Rosa", "Vermelho", "Laranja", "Amarelo", "Branco" },
+    Value = "Roxo",
+    Callback = function(v)
+        chosen.accent = v
+        applyColors()
+    end,
 })
-gMenu:dropdown({
-    Title = "Tamanho da GUI", Desc = "Escala do painel em %.",
-    Id = "ui_scale", Options = { "50%", "75%", "100%", "125%", "150%" }, Value = "100%",
-    Callback = function(v) UI.setScale(tonumber((tostring(v):gsub("%%", "")))) end,
+gColors:input({
+    Title = "Destaque personalizado (hex)", Desc = "Ex.: #A878FF. Vazio usa a cor acima.",
+    Id = "ui_accent_hex", Value = "", Placeholder = "#A878FF",
+    Callback = function(v)
+        chosen.accentHex = v
+        applyColors()
+    end,
 })
-gMenu:dropdown({
+gColors:dropdown({
+    Title = "Cor de fundo", Desc = "Cor base do painel.",
+    Id = "ui_bg", Options = { "Padrão", "Grafite", "Roxo escuro", "Azul escuro", "Verde escuro", "Vinho", "Preto puro" },
+    Value = "Padrão",
+    Callback = function(v)
+        chosen.bg = v
+        applyColors()
+    end,
+})
+gColors:input({
+    Title = "Fundo personalizado (hex)", Desc = "Ex.: #101018. Vazio usa a cor acima.",
+    Id = "ui_bg_hex", Value = "", Placeholder = "#101018",
+    Callback = function(v)
+        chosen.bgHex = v
+        applyColors()
+    end,
+})
+gColors:dropdown({
+    Title = "Cor das bordas", Desc = "Contorno da janela e dos cards.",
+    Id = "ui_border", Options = { "Padrão", "Roxo", "Azul", "Rosa", "Branco", "Cinza", "Preto" }, Value = "Padrão",
+    Callback = function(v)
+        chosen.border = v
+        applyColors()
+    end,
+})
+gColors:input({
+    Title = "Bordas personalizadas (hex)", Desc = "Ex.: #FFFFFF. Vazio usa a cor acima.",
+    Id = "ui_border_hex", Value = "", Placeholder = "#FFFFFF",
+    Callback = function(v)
+        chosen.borderHex = v
+        applyColors()
+    end,
+})
+
+local gLook = Config.Aparencia:group("Estilo e fundo")
+gLook:dropdown({
     Title = "Estilo da GUI", Desc = "Clean: simples. Soft: brilho e degradê.",
     Id = "ui_style", Options = { "Clean", "Soft" }, Value = "Soft",
     Callback = function(v) UI.setStyle(v) end,
 })
-gMenu:dropdown({
+gLook:dropdown({
+    Title = "Fundo", Desc = "Sólido, gradiente ou automático (segue o estilo).",
+    Id = "ui_bgmode", Options = { "Automático", "Sólido", "Gradiente" }, Value = "Automático",
+    Callback = function(v) UI.setGradient(v) end,
+})
+gLook:slider({
+    Title = "Arredondamento", Desc = "Raio dos cantos dos cards.",
+    Id = "ui_radius", Min = 2, Max = 16, Step = 1, Value = 8,
+    Callback = function(v) UI.setRadius(v) end,
+})
+gLook:dropdown({
+    Title = "Fonte", Desc = "Fonte usada em toda a GUI.",
+    Id = "ui_font", Options = UI.fontNames, Value = "Gotham",
+    Callback = function(v) UI.setFont(v) end,
+})
+gLook:dropdown({
+    Title = "Animações", Desc = "Desligadas, Suaves ou Completas (com brilho e hover).",
+    Id = "ui_anim", Options = { "Desligadas", "Suaves", "Completas" }, Value = "Completas",
+    Callback = function(v) UI.setAnim(v) end,
+})
+gLook:dropdown({
+    Title = "Botão de abrir", Desc = "Como abrir o painel: pílula ou bolha.",
+    Id = "ui_opener", Options = { "Pílula", "Bolha" }, Value = "Pílula",
+    Callback = function(v) UI.setOpener(v) end,
+})
+gLook:dropdown({
     Title = "Transparência da GUI", Desc = "Menor % = mais opaca.",
     Id = "ui_transp", Options = { "0%", "10%", "20%", "30%", "40%", "50%" }, Value = "0%",
     Callback = function(v) UI.setTransparency(tonumber((tostring(v):gsub("%%", "")))) end,
 })
+gLook:dropdown({
+    Title = "Tamanho da GUI", Desc = "Escala do painel em %.",
+    Id = "ui_scale", Options = { "50%", "75%", "100%", "125%", "150%" }, Value = "100%",
+    Callback = function(v) UI.setScale(tonumber((tostring(v):gsub("%%", "")))) end,
+})
+gLook:dropdown({
+    Title = "Lado das notificações", Desc = "Onde os avisos aparecem.",
+    Id = "ui_side", Options = { "Esquerda", "Centro", "Direita" }, Value = "Direita",
+    Callback = function(v) UI.setNotifySide(v) end,
+})
+
+local gMenu = Config.Menu:group("Menu")
 gMenu:keybind({
     Title = "Tecla do painel", Desc = "Toque na caixa e aperte a tecla.",
     Id = "menu", Key = "RightControl", Callback = UI.toggle,
@@ -3226,6 +3596,76 @@ gMenu:button({
     Title = "Descarregar Script", Desc = "Desfaz tudo e fecha o menu.",
     Callback = function() STATE.teardown() end,
 })
+
+local DISCORD_CODE = "wQsTbapFVT"
+local DISCORD_URL = "https://discord.gg/" .. DISCORD_CODE
+local gDiscord = Config.Menu:group("Comunidade")
+gDiscord:button({
+    Title = "Entrar no Discord", Desc = "Copia o convite e tenta abrir o Discord.",
+    Callback = function()
+        local copied = false
+        for _, fnName in ipairs({ "setclipboard", "toclipboard", "set_clipboard" }) do
+            local fn = getgenv()[fnName]
+            if type(fn) == "function" and pcall(fn, DISCORD_URL) then
+                copied = true
+                break
+            end
+        end
+        local req = (syn and syn.request) or request or http_request
+        if req then
+            pcall(function()
+                req({
+                    Url = "http://127.0.0.1:6463/rpc?v=1", Method = "POST",
+                    Headers = { ["Content-Type"] = "application/json", Origin = "https://discord.com" },
+                    Body = HttpService:JSONEncode({
+                        cmd = "INVITE_BROWSER", args = { code = DISCORD_CODE }, nonce = HttpService:GenerateGUID(false),
+                    }),
+                })
+            end)
+        end
+        if copied then
+            notify("Discord", UI.trf("Convite copiado: %s", DISCORD_URL))
+        else
+            notify("Discord", UI.trf("Não consegui copiar. Convite: %s", DISCORD_URL))
+        end
+    end,
+})
+
+local LOG = {
+    { "Adicionado", {
+        "• GUI própria com sidebar em categorias, busca, atalhos (+/-) e configs salvas com auto load",
+        "• Estilos Clean e Soft, cores personalizáveis, fundo sólido ou gradiente, fonte, animações e botão pílula/bolha",
+        "• Hitbox da bola (cor e tamanho de 0.1 a 20), Carga Máxima, Saque Máximo, Pés de Chumbo, ESP de Pulo com cor e Anti-Lag",
+        "• Shift Lock Automático e Tremor de Câmera desativável",
+        "• Efeito de ponto com favoritos, lista com % e sorteio; skins de bola, camisa e card",
+        "• Marcador de queda (3 modos e tamanho), Custom Protect (SCYP4), recompensas e códigos",
+        "• Idiomas PT/EN, tela de carregamento, botão do Discord e este log",
+    } },
+    { "Alterado", {
+        "• Efeito de ponto usa o sistema original da source e ignora pontos de aliados",
+        "• Anti-Lag igual à source, restaurando qualidade e gráficos ao desligar",
+        "• Shift Lock só mexe no personagem com a função ligada",
+        "• Tremor de câmera respeita o Shift Lock",
+    } },
+    { "Modificado", {
+        "• Layout em cards de largura total, no estilo Acrylic",
+        "• Pílula arrastável e mais baixa; a transparência afeta toda a GUI",
+        "• Efeito de ponto e hitbox só mantêm conexões quando ligados (menos travadas ao entrar na partida)",
+    } },
+    { "Excluído", {
+        "• Corrigir Câmera (substituído por Tremor de Câmera)",
+        "• Versões antigas de teste (Rayfield e GUI simples)",
+    } },
+    { "Corrigido", {
+        "• Corte na lateral da GUI",
+        "• Personagem andando de lado ao executar",
+        "• Anti-Lag que não voltava ao normal",
+    } },
+}
+local gLog = Sobre:group("Versão 1.0")
+for _, entry in ipairs(LOG) do
+    gLog:text(entry[1] .. "\n" .. table.concat(entry[2], "\n"))
+end
 
 local gCfg = Config.Salvas:group("Configurações Salvas")
 local cfgNameInput = gCfg:input({
@@ -3247,7 +3687,7 @@ local function refreshCfgList(selectName)
     end
 end
 cfgDD = gCfg:dropdown({
-    Title = "Configs salvas", Desc = "Pesquise ou escolha uma.",
+    Title = "Config escolhida", Desc = "Pesquise ou escolha uma.",
     Options = listConfigs(), Value = "-",
     Callback = function(v) selectedCfg = v end,
 })
