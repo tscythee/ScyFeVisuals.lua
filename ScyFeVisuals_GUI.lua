@@ -1,57 +1,182 @@
---[[ ScyFe Visuals - Volleyball Legends
-     Tudo visual e local (só você vê). Pílula ou tecla do painel abre/fecha. Erros: console (F9), prefixo [ScyFe]. ]]
+--[[ Daishyn - Volleyball Legends
+     Tudo visual e local (só você vê). Pílula ou tecla do painel abre/fecha. Erros: console (F9), prefixo [Daishyn]. ]]
 
 local TweenService = game:GetService("TweenService")
+local HttpService = game:GetService("HttpService")
+
+local function rgb(r, g, b) return Color3.fromRGB(r, g, b) end
+local THEMES = {
+    Halloween = {
+        accent = rgb(255, 138, 36), glow2 = rgb(255, 200, 70),
+        tint = { win = rgb(255, 215, 180), side = rgb(255, 200, 150), card = rgb(255, 225, 200), btn = rgb(255, 205, 150) },
+        Clean = { bg = rgb(9, 8, 7), side = rgb(14, 12, 10), card = rgb(20, 17, 15), field = rgb(12, 10, 9), btn = rgb(34, 29, 25), line = rgb(52, 44, 38) },
+        Soft = { bg = rgb(16, 10, 8), side = rgb(22, 14, 10), card = rgb(32, 20, 13), field = rgb(20, 13, 9), btn = rgb(52, 32, 18), line = rgb(96, 58, 28) },
+    },
+    Roxo = {
+        accent = rgb(168, 120, 255), glow2 = rgb(236, 120, 255),
+        tint = { win = rgb(215, 195, 255), side = rgb(210, 180, 255), card = rgb(225, 205, 255), btn = rgb(215, 190, 255) },
+        Clean = { bg = rgb(8, 8, 8), side = rgb(12, 12, 12), card = rgb(17, 17, 18), field = rgb(10, 10, 10), btn = rgb(28, 28, 30), line = rgb(40, 40, 44) },
+        Soft = { bg = rgb(12, 9, 21), side = rgb(17, 13, 29), card = rgb(24, 18, 39), field = rgb(15, 11, 25), btn = rgb(41, 29, 68), line = rgb(66, 48, 104) },
+    },
+}
+local function resolveTheme(mode)
+    if mode == "Automático" then
+        local d = os.date("*t")
+        local halloween = (d.month == 10 and d.day >= 20) or (d.month == 11 and d.day <= 2)
+        return halloween and "Halloween" or "Roxo"
+    end
+    return THEMES[mode] and mode or "Roxo"
+end
+
+local DISCORD_CODE = "wQsTbapFVT"
+local DISCORD_URL = "https://discord.gg/" .. DISCORD_CODE
+local DISCORD_ICON = "rbxassetid://18505728250"
+
+local function discordJoin()
+    local copied = false
+    for _, fnName in ipairs({ "setclipboard", "toclipboard", "set_clipboard" }) do
+        local fn = getgenv()[fnName]
+        if type(fn) == "function" and pcall(fn, DISCORD_URL) then
+            copied = true
+            break
+        end
+    end
+    local req = (syn and syn.request) or request or http_request
+    if req then
+        pcall(function()
+            req({
+                Url = "http://127.0.0.1:6463/rpc?v=1", Method = "POST",
+                Headers = { ["Content-Type"] = "application/json", Origin = "https://discord.com" },
+                Body = HttpService:JSONEncode({
+                    cmd = "INVITE_BROWSER", args = { code = DISCORD_CODE }, nonce = HttpService:GenerateGUID(false),
+                }),
+            })
+        end)
+    end
+    return copied
+end
+
 local loading = {}
 
 local function loadingShow()
     pcall(function()
+        local th = THEMES[resolveTheme("Automático")]
         local g = Instance.new("ScreenGui")
-        g.Name = "ScyFeLoading"
+        g.Name = "DaishynLoading"
         g.ResetOnSpawn = false
         g.IgnoreGuiInset = true
         g.DisplayOrder = 2000
         g.Parent = (gethui and gethui()) or game:GetService("CoreGui")
 
-        local root = Instance.new("CanvasGroup")
-        root.Size = UDim2.fromScale(1, 1)
-        root.BackgroundColor3 = Color3.fromRGB(8, 6, 15)
-        root.BorderSizePixel = 0
-        root.Parent = g
+        local panel = Instance.new("CanvasGroup")
+        panel.AnchorPoint = Vector2.new(0.5, 0.5)
+        panel.Position = UDim2.fromScale(0.5, 0.55)
+        panel.Size = UDim2.fromOffset(300, 196)
+        panel.BackgroundColor3 = th.Soft.bg
+        panel.BorderSizePixel = 0
+        panel.Parent = g
+        Instance.new("UICorner", panel).CornerRadius = UDim.new(0, 14)
+        local stroke = Instance.new("UIStroke", panel)
+        stroke.Color = th.accent
+        stroke.Thickness = 2
+        local strokeGrad = Instance.new("UIGradient", stroke)
+        strokeGrad.Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, th.accent), ColorSequenceKeypoint.new(0.5, th.glow2), ColorSequenceKeypoint.new(1, th.accent),
+        })
+        local bgGrad = Instance.new("UIGradient", panel)
+        bgGrad.Color = ColorSequence.new(rgb(255, 255, 255), th.tint.win)
+        bgGrad.Rotation = 90
+
+        local content = Instance.new("CanvasGroup")
+        content.BackgroundTransparency = 1
+        content.Size = UDim2.fromScale(1, 1)
+        content.Parent = panel
 
         local function text(str, size, color, font, y)
             local l = Instance.new("TextLabel")
             l.BackgroundTransparency = 1
-            l.AnchorPoint = Vector2.new(0.5, 0.5)
-            l.Position = UDim2.new(0.5, 0, 0.5, y)
-            l.Size = UDim2.new(0, 320, 0, size + 6)
+            l.AnchorPoint = Vector2.new(0.5, 0)
+            l.Position = UDim2.new(0.5, 0, 0, y)
+            l.Size = UDim2.new(1, -20, 0, size + 6)
             l.Text = str
             l.TextSize = size
             l.TextColor3 = color
             l.Font = font
-            l.Parent = root
+            l.Parent = content
             return l
         end
-        text("ScyFe Visuals", 30, Color3.fromRGB(168, 120, 255), Enum.Font.GothamBold, -42)
-        text("Made by @Tscythe", 14, Color3.fromRGB(235, 228, 255), Enum.Font.GothamMedium, -12)
+        text("Daishyn", 26, th.accent, Enum.Font.GothamBold, 14)
+        text("Made by @Tscythe", 12, rgb(225, 215, 205), Enum.Font.GothamMedium, 48)
 
         local track = Instance.new("Frame")
-        track.AnchorPoint = Vector2.new(0.5, 0.5)
-        track.Position = UDim2.new(0.5, 0, 0.5, 22)
-        track.Size = UDim2.new(0, 260, 0, 6)
-        track.BackgroundColor3 = Color3.fromRGB(40, 32, 64)
+        track.AnchorPoint = Vector2.new(0.5, 0)
+        track.Position = UDim2.new(0.5, 0, 0, 82)
+        track.Size = UDim2.new(0, 240, 0, 8)
+        track.BackgroundColor3 = th.Soft.btn
         track.BorderSizePixel = 0
-        track.Parent = root
-        Instance.new("UICorner", track).CornerRadius = UDim.new(0, 3)
+        track.Parent = content
+        Instance.new("UICorner", track).CornerRadius = UDim.new(0, 4)
         local fill = Instance.new("Frame")
         fill.Size = UDim2.new(0, 0, 1, 0)
-        fill.BackgroundColor3 = Color3.fromRGB(168, 120, 255)
+        fill.BackgroundColor3 = rgb(255, 255, 255)
         fill.BorderSizePixel = 0
         fill.Parent = track
-        Instance.new("UICorner", fill).CornerRadius = UDim.new(0, 3)
+        Instance.new("UICorner", fill).CornerRadius = UDim.new(0, 4)
+        local fillGrad = Instance.new("UIGradient", fill)
+        fillGrad.Color = ColorSequence.new(th.accent, th.glow2)
 
-        local status = text("Iniciando...", 12, Color3.fromRGB(150, 150, 165), Enum.Font.GothamMedium, 42)
-        loading.gui, loading.root, loading.fill, loading.status = g, root, fill, status
+        local percent = text("0%", 12, rgb(255, 255, 255), Enum.Font.GothamBold, 96)
+        local status = text("Iniciando...", 11, rgb(170, 160, 150), Enum.Font.GothamMedium, 114)
+
+        local button = Instance.new("TextButton")
+        button.AnchorPoint = Vector2.new(0.5, 0)
+        button.Position = UDim2.new(0.5, 0, 0, 144)
+        button.Size = UDim2.new(0, 168, 0, 36)
+        button.BackgroundColor3 = rgb(255, 255, 255)
+        button.Text = ""
+        button.AutoButtonColor = false
+        button.Parent = content
+        Instance.new("UICorner", button).CornerRadius = UDim.new(0, 18)
+        local btnGrad = Instance.new("UIGradient", button)
+        btnGrad.Color = ColorSequence.new(rgb(255, 150, 40), rgb(225, 80, 10))
+        local btnStroke = Instance.new("UIStroke", button)
+        btnStroke.Color = rgb(255, 214, 140)
+        btnStroke.Thickness = 1
+        btnStroke.Transparency = 0.45
+
+        local fallback = Instance.new("TextLabel")
+        fallback.BackgroundTransparency = 1
+        fallback.Position = UDim2.new(0, 12, 0.5, -11)
+        fallback.Size = UDim2.new(0, 22, 0, 22)
+        fallback.Text = "D"
+        fallback.TextColor3 = rgb(255, 255, 255)
+        fallback.TextSize = 15
+        fallback.Font = Enum.Font.GothamBold
+        fallback.Parent = button
+        local icon = Instance.new("ImageLabel")
+        icon.BackgroundTransparency = 1
+        icon.Position = UDim2.new(0, 12, 0.5, -11)
+        icon.Size = UDim2.new(0, 22, 0, 22)
+        icon.Image = DISCORD_ICON
+        icon.ZIndex = 2
+        icon.Parent = button
+        local label = Instance.new("TextLabel")
+        label.BackgroundTransparency = 1
+        label.Position = UDim2.new(0, 42, 0, 0)
+        label.Size = UDim2.new(1, -54, 1, 0)
+        label.Text = "Entrar no Discord"
+        label.TextColor3 = rgb(255, 255, 255)
+        label.TextSize = 13
+        label.Font = Enum.Font.GothamBold
+        label.TextXAlignment = Enum.TextXAlignment.Left
+        label.Parent = button
+        button.Activated:Connect(function()
+            local copied = discordJoin()
+            status.Text = copied and "Convite copiado!" or DISCORD_URL
+        end)
+
+        loading.gui, loading.panel, loading.content = g, panel, content
+        loading.fill, loading.percent, loading.status = fill, percent, status
     end)
 end
 
@@ -59,12 +184,13 @@ local function loadingStatus(msg, fraction)
     if not loading.gui then return end
     pcall(function()
         loading.status.Text = msg
+        loading.percent.Text = math.floor(fraction * 100 + 0.5) .. "%"
         TweenService:Create(loading.fill, TweenInfo.new(0.25), { Size = UDim2.new(fraction, 0, 1, 0) }):Play()
     end)
 end
 
 local function loadingHide(instant)
-    local g, root = loading.gui, loading.root
+    local g, panel = loading.gui, loading.panel
     loading.gui = nil
     if not g then return end
     pcall(function()
@@ -72,17 +198,37 @@ local function loadingHide(instant)
             g:Destroy()
             return
         end
-        TweenService:Create(root, TweenInfo.new(0.5), { GroupTransparency = 1 }):Play()
-        task.delay(0.6, function() g:Destroy() end)
+        TweenService:Create(panel, TweenInfo.new(0.25), { GroupTransparency = 1 }):Play()
+        task.delay(0.3, function() g:Destroy() end)
     end)
 end
 
+local function loadingExpand(reveal)
+    local g, panel = loading.gui, loading.panel
+    if not g or not panel then
+        reveal()
+        loadingHide(true)
+        return
+    end
+    pcall(function()
+        local screen = g.AbsoluteSize
+        local w = math.clamp(screen.X * 0.68, 460, 820)
+        local h = math.clamp(screen.Y * 0.86, 280, 500)
+        TweenService:Create(loading.content, TweenInfo.new(0.25), { GroupTransparency = 1 }):Play()
+        TweenService:Create(panel, TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
+            { Size = UDim2.fromOffset(w, h) }):Play()
+    end)
+    task.wait(0.5)
+    reveal()
+    loadingHide()
+end
+
 local function showError(msg)
-    warn("[ScyFe] " .. msg)
+    warn("[Daishyn] " .. msg)
     loadingHide(true)
     pcall(function()
         local g = Instance.new("ScreenGui")
-        g.Name = "ScyFeError"
+        g.Name = "DaishynError"
         g.ResetOnSpawn = false
         g.IgnoreGuiInset = true
         g.DisplayOrder = 1000
@@ -97,7 +243,7 @@ local function showError(msg)
         l.Font = Enum.Font.Code
         l.TextXAlignment = Enum.TextXAlignment.Left
         l.TextYAlignment = Enum.TextYAlignment.Top
-        l.Text = "ScyFe Visuals - erro ao iniciar:\n" .. string.sub(msg, 1, 700)
+        l.Text = "Daishyn - erro ao iniciar:\n" .. string.sub(msg, 1, 700)
         l.Parent = g
         task.delay(45, function() g:Destroy() end)
     end)
@@ -116,13 +262,15 @@ while not LP do
     LP = Players.LocalPlayer
 end
 
-local GEN = (getgenv().__ScyFeGen or 0) + 1
-getgenv().__ScyFeGen = GEN
-local function mine() return getgenv().__ScyFeGen == GEN end
+local GEN = (getgenv().__DaishynGen or 0) + 1
+getgenv().__DaishynGen = GEN
+local function mine() return getgenv().__DaishynGen == GEN end
 
 local STATE
 do
-    local prev = getgenv().__ScyFeState
+    local legacy = getgenv().__ScyFeState
+    if legacy then pcall(legacy.teardown) end
+    local prev = getgenv().__DaishynState
     if prev then pcall(prev.teardown) end
 
     local conns, cleanups = {}, {}
@@ -138,10 +286,10 @@ do
             for _, c in ipairs(conns) do pcall(function() c:Disconnect() end) end
             table.clear(conns)
             table.clear(cleanups)
-            if getgenv().__ScyFeState == STATE then getgenv().__ScyFeState = nil end
+            if getgenv().__DaishynState == STATE then getgenv().__DaishynState = nil end
         end,
     }
-    getgenv().__ScyFeState = STATE
+    getgenv().__DaishynState = STATE
 end
 
 loadingStatus("Montando interface...", 0.15)
@@ -165,13 +313,14 @@ local THEME = {
     warn   = Color3.fromRGB(255, 112, 112),
 }
 
-local function rgb(r, g, b) return Color3.fromRGB(r, g, b) end
-local PALETTE = {
-    Clean = { bg = rgb(8, 8, 8), side = rgb(12, 12, 12), card = rgb(17, 17, 18), field = rgb(10, 10, 10), btn = rgb(28, 28, 30), line = rgb(40, 40, 44) },
-    Soft = { bg = rgb(12, 9, 21), side = rgb(17, 13, 29), card = rgb(24, 18, 39), field = rgb(15, 11, 25), btn = rgb(41, 29, 68), line = rgb(66, 48, 104) },
-}
+local themeMode = "Automático"
+local themeName = resolveTheme(themeMode)
+local PALETTE = THEMES[themeName]
+local TINT = PALETTE.tint
+local glow2 = PALETTE.glow2
 local isSoft = true
 for k, v in pairs(PALETTE.Soft) do THEME[k] = v end
+THEME.accent = PALETTE.accent
 
 local FONT = { reg = Enum.Font.GothamMedium, bold = Enum.Font.GothamBold }
 local FONTSETS, FONT_NAMES = {}, {}
@@ -192,7 +341,8 @@ local animLevel = 2
 local gradMode = "Automático"
 local radiusExtra = 0
 local custom = { accent = nil, bg = nil, border = nil }
-local DEFAULT_ACCENT = Color3.fromRGB(168, 120, 255)
+local binds = {}
+local DEFAULT_ACCENT = PALETTE.accent
 
 local function new(class, props, parent)
     local o = Instance.new(class)
@@ -255,7 +405,7 @@ function UI.call(fn, ...)
     task.spawn(function()
         local ok, err = xpcall(fn, debug.traceback, table.unpack(args, 1, args.n))
         if not ok then
-            warn("[ScyFe] " .. tostring(err))
+            warn("[Daishyn] " .. tostring(err))
             UI.notify("Erro", string.sub(tostring(err):match("^[^\n]+") or "erro", 1, 90))
         end
     end)
@@ -275,7 +425,7 @@ local function tlabel(props, parent, key)
 end
 
 local gui = new("ScreenGui", {
-    Name = "ScyFeGUI", ResetOnSpawn = false, IgnoreGuiInset = true,
+    Name = "DaishynGUI", ResetOnSpawn = false, IgnoreGuiInset = true,
     ZIndexBehavior = Enum.ZIndexBehavior.Sibling, DisplayOrder = 999,
 })
 do
@@ -330,10 +480,11 @@ local function gradientsOn()
     return isSoft
 end
 local function gradient(frame, c0, c1, rotation)
+    local key = type(c1) == "string" and c1 or nil
     local g = new("UIGradient", {
-        Color = ColorSequence.new(c0, c1), Rotation = rotation or 90, Enabled = gradientsOn(),
+        Color = ColorSequence.new(c0, key and TINT[key] or c1), Rotation = rotation or 90, Enabled = gradientsOn(),
     }, frame)
-    table.insert(gradients, g)
+    table.insert(gradients, { g = g, key = key })
     return g
 end
 
@@ -362,8 +513,11 @@ local function refreshSurfaces()
     end
     for _, stroke in ipairs(lineStrokes) do stroke.Color = THEME.line end
     local on = gradientsOn()
-    for _, g in ipairs(gradients) do
-        if g.Parent then g.Enabled = on end
+    for _, e in ipairs(gradients) do
+        if e.g.Parent then
+            e.g.Enabled = on
+            if e.key then e.g.Color = ColorSequence.new(rgb(255, 255, 255), TINT[e.key]) end
+        end
     end
     for _, fn in ipairs(styleHooks) do pcall(fn, isSoft) end
 end
@@ -421,6 +575,16 @@ end
 function UI.setAnim(mode)
     animLevel = (mode == "Desligadas") and 0 or (mode == "Suaves") and 1 or 2
 end
+function UI.setTheme(mode)
+    themeMode = mode
+    themeName = resolveTheme(mode)
+    PALETTE = THEMES[themeName]
+    TINT = PALETTE.tint
+    glow2 = PALETTE.glow2
+    DEFAULT_ACCENT = PALETTE.accent
+    applyPalette()
+    UI.setAccent(custom.accent)
+end
 UI.fontNames = FONT_NAMES
 
 local function makeDraggable(target, handle, onTap)
@@ -461,11 +625,11 @@ local win = new("Frame", {
 round(win, 14)
 local winStroke = outline(win, THEME.accent, 2)
 skin(win, "bg")
-gradient(win, rgb(255, 255, 255), rgb(215, 195, 255), 90)
+gradient(win, rgb(255, 255, 255), "win", 90)
 local winGlow = new("UIGradient", {
     Color = ColorSequence.new({
         ColorSequenceKeypoint.new(0, THEME.accent),
-        ColorSequenceKeypoint.new(0.5, rgb(236, 120, 255)),
+        ColorSequenceKeypoint.new(0.5, glow2),
         ColorSequenceKeypoint.new(1, THEME.accent),
     }),
 }, winStroke)
@@ -481,7 +645,7 @@ onStyle(function(sf)
     winStroke.Color = c
     winGlow.Color = ColorSequence.new({
         ColorSequenceKeypoint.new(0, c),
-        ColorSequenceKeypoint.new(0.5, custom.border and c or rgb(236, 120, 255)),
+        ColorSequenceKeypoint.new(0.5, custom.border and c or glow2),
         ColorSequenceKeypoint.new(1, c),
     })
     winGlow.Enabled = sf
@@ -527,13 +691,13 @@ local side = new("Frame", {
 }, win)
 round(side, 14)
 skin(side, "side")
-gradient(side, rgb(255, 255, 255), rgb(210, 180, 255), 90)
+gradient(side, rgb(255, 255, 255), "side", 90)
 local sideCover = new("Frame", {
     Size = UDim2.new(0, 14, 1, 0), Position = UDim2.new(1, -14, 0, 0),
     BackgroundColor3 = THEME.side, BorderSizePixel = 0,
 }, side)
 skin(sideCover, "side")
-gradient(sideCover, rgb(255, 255, 255), rgb(210, 180, 255), 90)
+gradient(sideCover, rgb(255, 255, 255), "side", 90)
 local sideEdge = new("Frame", {
     Size = UDim2.new(0, 2, 1, -30), Position = UDim2.new(1, -2, 0, 15),
     BackgroundColor3 = THEME.accent, BorderSizePixel = 0,
@@ -546,7 +710,7 @@ new("UIGradient", {
 }, sideEdge)
 onStyle(function(s) sideEdge.Visible = s end)
 label({
-    Text = "ScyFe Visuals", Font = FONT.bold, TextSize = 14, TextColor3 = THEME.accent,
+    Text = "Daishyn", Font = FONT.bold, TextSize = 14, TextColor3 = THEME.accent,
     Position = UDim2.new(0, 12, 0, 12), Size = UDim2.new(1, -16, 0, 18),
 }, side)
 label({
@@ -558,8 +722,34 @@ local hint = label({
     Position = UDim2.new(0, 12, 1, -30), Size = UDim2.new(1, -16, 0, 24),
 }, side)
 
+local discordBtn = new("TextButton", {
+    Text = "", Position = UDim2.new(0, 10, 1, -80), Size = UDim2.new(1, -20, 0, 36),
+    BackgroundColor3 = rgb(255, 255, 255), AutoButtonColor = false,
+}, side)
+round(discordBtn, 18)
+new("UIGradient", { Color = ColorSequence.new(rgb(255, 150, 40), rgb(225, 80, 10)) }, discordBtn)
+outline(discordBtn, rgb(255, 214, 140), 1).Transparency = 0.45
+label({
+    Text = "D", Font = FONT.bold, TextSize = 15, TextColor3 = rgb(255, 255, 255),
+    TextXAlignment = Enum.TextXAlignment.Center, Position = UDim2.new(0, 12, 0.5, -11), Size = UDim2.new(0, 22, 0, 22),
+}, discordBtn)
+new("ImageLabel", {
+    Image = DISCORD_ICON, BackgroundTransparency = 1, Position = UDim2.new(0, 12, 0.5, -11),
+    Size = UDim2.new(0, 22, 0, 22), ZIndex = 2,
+}, discordBtn)
+label({
+    Text = "Discord", Font = FONT.bold, TextSize = 13, TextColor3 = rgb(255, 255, 255),
+    Position = UDim2.new(0, 42, 0, 0), Size = UDim2.new(1, -50, 1, 0),
+}, discordBtn)
+discordBtn.Activated:Connect(function()
+    UI.call(function()
+        local copied = discordJoin()
+        UI.notify("Discord", string.format(tr(copied and "Convite copiado: %s" or "Não consegui copiar. Convite: %s"), DISCORD_URL))
+    end)
+end)
+
 local nav = new("ScrollingFrame", {
-    Position = UDim2.new(0, 6, 0, 54), Size = UDim2.new(1, -12, 1, -88), BackgroundTransparency = 1,
+    Position = UDim2.new(0, 6, 0, 54), Size = UDim2.new(1, -12, 1, -142), BackgroundTransparency = 1,
     BorderSizePixel = 0, ScrollBarThickness = 0, CanvasSize = UDim2.new(0, 0, 0, 0),
     AutomaticCanvasSize = Enum.AutomaticSize.Y,
 }, side)
@@ -632,12 +822,12 @@ end
 makeDraggable(win, header, nil)
 
 local pill = new("TextButton", {
-    Text = "ScyFe Visuals", Font = FONT.bold, TextSize = 13, TextColor3 = THEME.text,
+    Text = "Daishyn", Font = FONT.bold, TextSize = 13, TextColor3 = THEME.text,
     AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 54), Size = UDim2.new(0, 140, 0, 30),
     BackgroundColor3 = THEME.bg, AutoButtonColor = false,
 }, gui)
 round(pill, 15)
-skin(pill, "bg")
+surface(pill, "bg")
 local pillStroke = outline(pill, THEME.accent, 2)
 onStyle(function() pillStroke.Color = custom.border or THEME.accent end)
 local pillRing = new("Frame", { Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1 }, pill)
@@ -648,13 +838,22 @@ onStyle(function(s) pillRing.Visible = s end)
 makeDraggable(pill, pill, UI.toggle)
 
 local bubble = new("TextButton", {
-    Text = "SV", Font = FONT.bold, TextSize = 15, TextColor3 = THEME.text,
+    Text = "", Font = FONT.bold, TextSize = 15, TextColor3 = THEME.text,
     AnchorPoint = Vector2.new(0.5, 0), Position = pill.Position, Size = UDim2.new(0, 46, 0, 46),
     BackgroundColor3 = THEME.bg, AutoButtonColor = false, Visible = false,
 }, gui)
 round(bubble, 23)
-skin(bubble, "bg")
-gradient(bubble, rgb(255, 255, 255), rgb(215, 195, 255), 90)
+surface(bubble, "bg")
+local bubbleFallback = label({
+    Text = "D", Font = FONT.bold, TextSize = 18, TextColor3 = THEME.accent,
+    TextXAlignment = Enum.TextXAlignment.Center, Size = UDim2.new(1, 0, 1, 0),
+}, bubble)
+local bubbleImage = new("ImageLabel", {
+    Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, Image = "rbxassetid://8942361531",
+    ScaleType = Enum.ScaleType.Crop, ZIndex = 2,
+}, bubble)
+round(bubbleImage, 23)
+gradient(bubble, rgb(255, 255, 255), "win", 90)
 local bubbleStroke = outline(bubble, THEME.accent, 2)
 onStyle(function() bubbleStroke.Color = custom.border or THEME.accent end)
 local bubbleRing = new("Frame", { Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1 }, bubble)
@@ -662,12 +861,50 @@ round(bubbleRing, 23)
 outline(bubbleRing, THEME.accent, 6).Transparency = 0.78
 onStyle(function(sf) bubbleRing.Visible = sf end)
 makeDraggable(bubble, bubble, UI.toggle)
-function UI.setOpener(mode)
-    local useBubble = (mode == "Bolha")
-    if useBubble then bubble.Position = pill.Position else pill.Position = bubble.Position end
-    pill.Visible = not useBubble
-    bubble.Visible = useBubble
+local openerMode = "Pílula"
+local revealed = false
+local function applyOpener()
+    pill.Visible = revealed and openerMode == "Pílula"
+    bubble.Visible = revealed and openerMode == "Bolha"
 end
+function UI.setOpener(mode)
+    if mode == "Nenhum" then
+        local b = binds["menu"]
+        if not (b and b.key) then
+            UI.notify("Aviso", tr("Defina a tecla do painel antes de usar Nenhum."))
+            mode = "Pílula"
+        end
+    end
+    if mode == "Bolha" and openerMode ~= "Bolha" then
+        bubble.Position = pill.Position
+    elseif mode == "Pílula" and openerMode == "Bolha" then
+        pill.Position = bubble.Position
+    end
+    openerMode = mode
+    applyOpener()
+end
+function UI.reveal()
+    revealed = true
+    winOpen = true
+    win.Visible = true
+    winScale.Scale = uiScaleValue
+    applyOpener()
+end
+function UI.setPillTransparency(percent)
+    local t = math.clamp((tonumber(percent) or 0) / 100, 0, 0.9)
+    pill.BackgroundTransparency = t
+    pillStroke.Transparency = t * 0.6
+end
+function UI.setBubbleTransparency(percent)
+    local t = math.clamp((tonumber(percent) or 0) / 100, 0, 0.9)
+    bubble.BackgroundTransparency = t
+    bubbleImage.ImageTransparency = t
+    bubbleFallback.TextTransparency = t
+    bubbleStroke.Transparency = t * 0.6
+end
+win.Visible = false
+winOpen = false
+pill.Visible = false
 
 local toast = new("Frame", {
     AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -12, 0, 96),
@@ -716,7 +953,6 @@ local KEYNAMES = {
     RightControl = "RCtrl", LeftControl = "LCtrl", RightShift = "RShift", LeftShift = "LShift",
     Return = "Enter", Backspace = "Bksp", Space = "Espaço", RightAlt = "RAlt", LeftAlt = "LAlt",
 }
-local binds = {}
 local capturing = nil
 
 local function makeHotkey(row, id, defaultKey, fn, rightOffset, alwaysShown, onResize)
@@ -922,7 +1158,7 @@ Tab.__index = Tab
 local G = {}
 G.__index = G
 
-function UI.tab(name, category)
+function UI.tab(name, category, color)
     category = category or name
     local cat = cats[category]
     if not cat then
@@ -934,12 +1170,12 @@ function UI.tab(name, category)
             AutoButtonColor = false, LayoutOrder = cat.order,
         }, nav)
         local headLabel = label({
-            Font = FONT.bold, TextSize = 12, TextColor3 = THEME.sub,
+            Font = FONT.bold, TextSize = 12, TextColor3 = color or THEME.sub,
             Position = UDim2.new(0, 10, 0, 0), Size = UDim2.new(1, -34, 1, 0),
         }, headBtn)
         reg(headLabel, category)
         cat.chev = label({
-            Text = ">", TextSize = 12, TextColor3 = THEME.sub, TextXAlignment = Enum.TextXAlignment.Center,
+            Text = ">", TextSize = 12, TextColor3 = color or THEME.sub, TextXAlignment = Enum.TextXAlignment.Center,
             Position = UDim2.new(1, -24, 0, 0), Size = UDim2.new(0, 16, 1, 0),
         }, headBtn)
         headBtn.Activated:Connect(function() setCategory(cat, not cat.open) end)
@@ -971,7 +1207,7 @@ function UI.tab(name, category)
     pad(btn, 24, 0, 0, 0)
     local bar = new("Frame", {
         Size = UDim2.new(0, 3, 0, 14), Position = UDim2.new(0, -16, 0.5, -7),
-        BackgroundColor3 = THEME.accent, BorderSizePixel = 0, Visible = false,
+        BackgroundColor3 = color or THEME.accent, BorderSizePixel = 0, Visible = false,
     }, btn)
     round(bar, 2)
     table.insert(cat.items, btn)
@@ -1009,7 +1245,7 @@ function G:_row(height, title, desc)
     cornerStyle(row, 8, 10)
     lineStroke(row)
     skin(row, "card")
-    gradient(row, rgb(255, 255, 255), rgb(225, 205, 255), 90)
+    gradient(row, rgb(255, 255, 255), "card", 90)
     pad(row, 12, 5, 12, 5)
     row.MouseEnter:Connect(function()
         if animLevel >= 2 then tween(row, { BackgroundColor3 = THEME.card:Lerp(rgb(255, 255, 255), 0.06) }, 0.12) end
@@ -1071,6 +1307,31 @@ function G:note(text)
     return obj
 end
 
+function G:notice(date, version, text)
+    self.n += 1
+    local red = Color3.fromRGB(255, 84, 84)
+    local row = new("Frame", {
+        Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundColor3 = THEME.card,
+        BorderSizePixel = 0, LayoutOrder = self.base + self.n,
+    }, self.card)
+    round(row, 8)
+    cornerStyle(row, 8, 10)
+    outline(row, red, 1)
+    skin(row, "card")
+    gradient(row, rgb(255, 255, 255), "card", 90)
+    pad(row, 12, 8, 12, 8)
+    new("UIListLayout", { Padding = UDim.new(0, 4), SortOrder = Enum.SortOrder.LayoutOrder }, row)
+    label({
+        Text = "Daishyn  •  " .. date .. "  •  v" .. version, Font = FONT.bold, TextSize = 12, TextColor3 = red,
+        Size = UDim2.new(1, 0, 0, 16), LayoutOrder = 1,
+    }, row)
+    label({
+        Text = text, TextSize = 12, TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top,
+        AutomaticSize = Enum.AutomaticSize.Y, Size = UDim2.new(1, 0, 0, 0), LayoutOrder = 2,
+    }, row)
+    table.insert(rowsReg, { row = row, page = self.card, text = string.lower(text .. " " .. date) })
+end
+
 function G:text(text)
     self.n += 1
     local row = new("Frame", {
@@ -1081,7 +1342,7 @@ function G:text(text)
     cornerStyle(row, 8, 10)
     lineStroke(row)
     skin(row, "card")
-    gradient(row, rgb(255, 255, 255), rgb(225, 205, 255), 90)
+    gradient(row, rgb(255, 255, 255), "card", 90)
     pad(row, 12, 8, 12, 8)
     local l = label({
         Text = text, TextSize = 12, TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top,
@@ -1432,6 +1693,7 @@ function G:dropdown(o)
                     fav[name] = (not fav[name]) or nil
                     paintOptions()
                     reorder()
+                    if o.Id and UI.favStore then UI.favStore.set(o.Id, obj:GetFavorites()) end
                 end)
             end
             items[name] = { frame = frame, name = nameBtn, star = star }
@@ -1483,6 +1745,7 @@ function G:dropdown(o)
             get = function() return obj:GetFavorites() end,
             set = function(v) obj:SetFavorites(v) end,
         }
+        if UI.favStore then obj:SetFavorites(UI.favStore.get(o.Id)) end
     end
     return obj
 end
@@ -1665,7 +1928,7 @@ local Cfg = {
     Ball   = "ClassicBall",          BallOn   = false, BallRandom   = false,
     Jersey = "DragonTuxedoJersey",   JerseyOn = false,
     Card   = "UltimateChampionPlayerCard", CardOn = false, CardRandom = false,
-    Name   = "SCYP4",                ProtectOn = false,
+    Name   = "Daishyn",                ProtectOn = false,
 }
 
 local function pick(list)
@@ -1982,7 +2245,7 @@ local function ballApply(model)
     Ball.saved[model] = saved
 
     local clone = template:Clone()
-    clone.Name = "ScyFeBall"
+    clone.Name = "DaishynBall"
     clone.Parent = model
 
     local parts = {}
@@ -2038,27 +2301,6 @@ local function ballApplyAll()
     end
 end
 
-STATE.connect(workspace.ChildAdded, function(child)
-    if not (Cfg.BallOn or Cfg.BallRandom) then return end
-    if not child:IsA("Model") or not child.Name:match("^CLIENT_BALL_") then return end
-    task.spawn(function()
-        local n = 0
-        while n < 40 and not (child.PrimaryPart or child:FindFirstChildWhichIsA("BasePart")) do
-            n += 1
-            task.wait(0.05)
-        end
-        if child.Parent and (Cfg.BallOn or Cfg.BallRandom) then
-            if Cfg.BallRandom then
-                local b = pick(balls)
-                if b then
-                    Cfg.Ball = b
-                    notify("Ball", UI.trf("Aleatória: %s", b))
-                end
-            end
-            pcall(ballApply, child)
-        end
-    end)
-end)
 STATE.onCleanup(ballRestoreAll)
 
 local Jersey = { saved = setmetatable({}, { __mode = "k" }), team = nil }
@@ -2124,7 +2366,7 @@ local function jerseyApply()
         Player = LP, Character = char, Id = Cfg.Jersey, TeamName = Jersey.team,
     })
     if not ok then
-        warn("[ScyFe] jersey apply failed: " .. tostring(err))
+        warn("[Daishyn] jersey apply failed: " .. tostring(err))
         return false
     end
     Jersey.team = Jersey.team or findTeam()
@@ -2247,14 +2489,14 @@ local function installHook()
         setreadonly(mt, true)
     end)
     if not ok then
-        warn("[ScyFe] hook falhou: " .. tostring(err))
+        warn("[Daishyn] hook falhou: " .. tostring(err))
         return false
     end
     Hook.installed = true
     return true
 end
 
-local HB = { on = false, size = 5, color = Color3.fromRGB(150, 90, 255), transp = 0.3, name = rnd() }
+local HB = { on = false, size = 5, color = Color3.fromRGB(255, 165, 0), transp = 0.3, name = rnd() }
 local HB_COLORS = {
     ["Invisível"] = { Color3.fromRGB(255, 255, 255), 1 },
     ["Branco"]    = { Color3.fromRGB(255, 255, 255), 0.3 },
@@ -2313,15 +2555,11 @@ local function hbRemove()
         end
     end
 end
-STATE.connect(workspace.ChildAdded, function(child)
-    if HB.on and isBallModel(child) then
-        task.wait(0.1)
-        hbApply()
-    end
-end)
+local childUpdate
 local hbConn
 local function hbSet(on)
     HB.on = on
+    childUpdate()
     if hbConn then hbConn:Disconnect() hbConn = nil end
     if on then
         local cache, last = {}, 0
@@ -2347,24 +2585,118 @@ local function hbSet(on)
 end
 STATE.onCleanup(function() hbSet(false) end)
 
-local AL = { saved = {}, conn = nil, ql = nil, sql = nil, token = 0 }
+local childConn
+childUpdate = function()
+    local want = HB.on or Cfg.BallOn or Cfg.BallRandom
+    if want and not childConn then
+        childConn = workspace.ChildAdded:Connect(function(child)
+            if not child:IsA("Model") or not child.Name:match("^CLIENT_BALL_") then return end
+            if HB.on then task.delay(0.1, hbApply) end
+            if Cfg.BallOn or Cfg.BallRandom then
+                task.spawn(function()
+                    local n = 0
+                    while n < 40 and not (child.PrimaryPart or child:FindFirstChildWhichIsA("BasePart")) do
+                        n += 1
+                        task.wait(0.05)
+                    end
+                    if child.Parent and (Cfg.BallOn or Cfg.BallRandom) then
+                        if Cfg.BallRandom then
+                            local b = pick(balls)
+                            if b then
+                                Cfg.Ball = b
+                                notify("Ball", UI.trf("Aleatória: %s", b))
+                            end
+                        end
+                        pcall(ballApply, child)
+                    end
+                end)
+            end
+        end)
+    elseif not want and childConn then
+        childConn:Disconnect()
+        childConn = nil
+    end
+end
+STATE.onCleanup(function()
+    if childConn then childConn:Disconnect() childConn = nil end
+end)
+
+local AL = {
+    saved = {}, conn = nil, hb = nil, queue = {}, qi = 1, ql = nil, sql = nil, token = 0,
+    opts = { chars = true, ball = true, court = true, fx = true, light = true, quality = true },
+}
+local PARTICLE = {
+    ParticleEmitter = true, Trail = true, Beam = true, Smoke = true, Fire = true, Sparkles = true,
+    PointLight = true, SpotLight = true, SurfaceLight = true,
+}
 
 local function alSet(inst, prop, val)
     if not inst then return end
     local ok, cur = pcall(function() return inst[prop] end)
     if not ok or cur == nil then return end
-    local s = AL.saved[inst]
-    if not s then
-        s = {}
-        AL.saved[inst] = s
+    local saved = AL.saved[inst]
+    if not saved then
+        saved = {}
+        AL.saved[inst] = saved
     end
-    if s[prop] == nil then s[prop] = cur end
+    if saved[prop] == nil then saved[prop] = cur end
     pcall(function() inst[prop] = val end)
 end
 
+local function alCharacterOf(inst)
+    local p = inst.Parent
+    while p and p ~= workspace do
+        if p:IsA("Model") and p:FindFirstChildOfClass("Humanoid") then return p end
+        p = p.Parent
+    end
+    return nil
+end
+local function alIsBall(inst)
+    local p = inst
+    while p and p ~= workspace do
+        if string.sub(p.Name, 1, 12) == "CLIENT_BALL_" then return true end
+        p = p.Parent
+    end
+    return false
+end
+local function alCategory(inst)
+    if PARTICLE[inst.ClassName] then return "fx" end
+    local char = alCharacterOf(inst)
+    if char then return (char ~= LP.Character) and "chars" or nil end
+    if alIsBall(inst) then return "ball" end
+    return "court"
+end
+
 local function alInst(i)
-    local char = LP.Character
-    if char and i:IsDescendantOf(char) then return end
+    local particle = PARTICLE[i.ClassName]
+    if not (particle or i:IsA("BasePart") or i:IsA("Decal") or i:IsA("Texture") or i:IsA("SpecialMesh")
+        or i:IsA("SurfaceAppearance") or i:IsA("Clothing") or i:IsA("ShirtGraphic")) then
+        return
+    end
+    local cat = alCategory(i)
+    if not cat or not AL.opts[cat] then return end
+    if particle then
+        alSet(i, "Enabled", false)
+        return
+    end
+    if cat == "chars" then
+        if i:IsA("Shirt") then
+            alSet(i, "ShirtTemplate", "")
+        elseif i:IsA("Pants") then
+            alSet(i, "PantsTemplate", "")
+        elseif i:IsA("ShirtGraphic") then
+            alSet(i, "Graphic", "")
+        elseif i:IsA("Decal") or i:IsA("Texture") then
+            alSet(i, "Transparency", 1)
+        elseif i:IsA("BasePart") then
+            if i.Parent and i.Parent:IsA("Accessory") then alSet(i, "Transparency", 1) end
+            alSet(i, "Material", Enum.Material.SmoothPlastic)
+            if i:IsA("MeshPart") then alSet(i, "TextureID", "") end
+        elseif i:IsA("SpecialMesh") then
+            alSet(i, "TextureId", "")
+        end
+        return
+    end
     if i:IsA("BasePart") then
         alSet(i, "Material", Enum.Material.SmoothPlastic)
         alSet(i, "Reflectance", 0)
@@ -2375,11 +2707,6 @@ local function alInst(i)
         end
     elseif i:IsA("Decal") or i:IsA("Texture") then
         alSet(i, "Transparency", 1)
-    elseif i:IsA("ParticleEmitter") or i:IsA("Trail") or i:IsA("Beam") or i:IsA("Smoke")
-        or i:IsA("Fire") or i:IsA("Sparkles") then
-        alSet(i, "Enabled", false)
-    elseif i:IsA("PointLight") or i:IsA("SpotLight") or i:IsA("SurfaceLight") then
-        alSet(i, "Enabled", false)
     elseif i:IsA("SpecialMesh") then
         alSet(i, "TextureId", "")
     elseif i:IsA("SurfaceAppearance") then
@@ -2388,6 +2715,19 @@ local function alInst(i)
         alSet(i, "NormalMap", "")
         alSet(i, "RoughnessMap", "")
     end
+end
+
+local function alProcess(budget)
+    local queue = AL.queue
+    local n = 0
+    while AL.qi <= #queue and n < budget do
+        local inst = queue[AL.qi]
+        queue[AL.qi] = false
+        AL.qi += 1
+        if inst and inst.Parent then alInst(inst) end
+        n += 1
+    end
+    if AL.qi > #queue then AL.queue, AL.qi = {}, 1 end
 end
 
 local function alQuality()
@@ -2403,36 +2743,7 @@ local function alQuality()
     end)
 end
 
-local function alRestore()
-    AL.token += 1
-    if AL.conn then AL.conn:Disconnect() AL.conn = nil end
-    local saved, ql, sql = AL.saved, AL.ql, AL.sql
-    AL.saved, AL.ql, AL.sql = {}, nil, nil
-
-    pcall(function()
-        if ql ~= nil then settings().Rendering.QualityLevel = ql end
-    end)
-    pcall(function()
-        if sql ~= nil then UserSettings():GetService("UserGameSettings").SavedQualityLevel = sql end
-    end)
-
-    task.spawn(function()
-        local n = 0
-        for inst, props in pairs(saved) do
-            for prop, val in pairs(props) do
-                pcall(function() inst[prop] = val end)
-            end
-            n += 1
-            if n % 300 == 0 then task.wait() end
-        end
-    end)
-end
-
-local function alEnable()
-    AL.token += 1
-    local my = AL.token
-    alQuality()
-
+local function alLighting()
     alSet(Lighting, "Technology", Enum.Technology.Compatibility)
     alSet(Lighting, "GlobalShadows", false)
     alSet(Lighting, "FogEnd", 1000000000)
@@ -2457,22 +2768,64 @@ local function alEnable()
         alSet(terrain, "WaterReflectance", 0)
         alSet(terrain, "WaterTransparency", 1)
     end
-
-    if AL.conn then AL.conn:Disconnect() end
-    AL.conn = workspace.DescendantAdded:Connect(function(d)
-        if Cfg.AntiLag and AL.token == my then alInst(d) end
-    end)
-    task.spawn(function()
-        local n = 0
-        for _, d in ipairs(workspace:GetDescendants()) do
-            if not Cfg.AntiLag or AL.token ~= my then return end
-            alInst(d)
-            n += 1
-            if n % 400 == 0 then task.wait() end
-        end
-    end)
 end
-STATE.onCleanup(alRestore)
+
+local function alRestore(sync)
+    AL.token += 1
+    if AL.conn then AL.conn:Disconnect() AL.conn = nil end
+    if AL.hb then AL.hb:Disconnect() AL.hb = nil end
+    AL.queue, AL.qi = {}, 1
+    local saved, ql, sql = AL.saved, AL.ql, AL.sql
+    AL.saved, AL.ql, AL.sql = {}, nil, nil
+
+    pcall(function()
+        if ql ~= nil then settings().Rendering.QualityLevel = ql end
+    end)
+    pcall(function()
+        if sql ~= nil then UserSettings():GetService("UserGameSettings").SavedQualityLevel = sql end
+    end)
+
+    local function run()
+        local n = 0
+        for inst, props in pairs(saved) do
+            for prop, val in pairs(props) do
+                pcall(function() inst[prop] = val end)
+            end
+            n += 1
+            if n % 300 == 0 then task.wait() end
+        end
+    end
+    if sync then run() else task.spawn(run) end
+end
+
+local function alEnable()
+    AL.token += 1
+    if AL.opts.quality then alQuality() end
+    if AL.opts.light then alLighting() end
+    local queue = AL.queue
+    for _, d in ipairs(workspace:GetDescendants()) do queue[#queue + 1] = d end
+    AL.conn = workspace.DescendantAdded:Connect(function(d) AL.queue[#AL.queue + 1] = d end)
+    AL.hb = RunService.Heartbeat:Connect(function() alProcess(120) end)
+end
+
+local alBusy, alDirty = false, false
+local function alRefresh()
+    if not Cfg.AntiLag then return end
+    if alBusy then
+        alDirty = true
+        return
+    end
+    alBusy = true
+    pcall(function()
+        repeat
+            alDirty = false
+            alRestore(true)
+            if Cfg.AntiLag then alEnable() end
+        until not alDirty
+    end)
+    alBusy = false
+end
+STATE.onCleanup(function() alRestore() end)
 
 local LF = { conn = nil }
 local function leadFeet()
@@ -2521,14 +2874,10 @@ end
 local function espClearAll()
     for p in pairs(ESP.hl) do espClear(p) end
 end
-STATE.connect(RunService.Heartbeat, function(dt)
+local function espStep(dt)
     ESP.acc += dt
     if ESP.acc < 0.1 then return end
     ESP.acc = 0
-    if not Cfg.ESP then
-        if next(ESP.hl) then espClearAll() end
-        return
-    end
     for _, p in ipairs(Players:GetPlayers()) do
         if p ~= LP then
             local enemy = p.Team and LP.Team and p.Team ~= LP.Team
@@ -2559,8 +2908,102 @@ STATE.connect(RunService.Heartbeat, function(dt)
             end
         end
     end
-end)
-STATE.onCleanup(espClearAll)
+end
+local espConn
+local function espSet(on)
+    Cfg.ESP = on
+    if espConn then espConn:Disconnect() espConn = nil end
+    if on then
+        espConn = RunService.Heartbeat:Connect(espStep)
+    else
+        espClearAll()
+    end
+end
+STATE.onCleanup(function() espSet(false) end)
+
+local LN = {
+    conn = nil, parts = {}, color = HB_COLORS["Vermelho"][1], width = 0.15, dist = 50,
+    who = "Inimigos", move = true, name = rnd(),
+}
+local function lnDraw(p, key, from, to, color, width)
+    local entry = LN.parts[p]
+    if not entry then
+        entry = {}
+        LN.parts[p] = entry
+    end
+    local part = entry[key]
+    if not part or not part.Parent then
+        part = Instance.new("Part")
+        part.Name = LN.name
+        part.Anchored = true
+        part.CanCollide = false
+        part.CanQuery = false
+        part.CanTouch = false
+        part.CastShadow = false
+        part.Material = Enum.Material.Neon
+        part.Transparency = 0.25
+        part.Parent = workspace.CurrentCamera
+        entry[key] = part
+    end
+    local length = (to - from).Magnitude
+    part.Size = Vector3.new(width, width, math.max(length, 0.1))
+    part.CFrame = CFrame.lookAt((from + to) / 2, to)
+    part.Color = color
+end
+local function lnHide(p, key)
+    local entry = LN.parts[p]
+    if not entry then return end
+    if key then
+        if entry[key] then entry[key]:Destroy() entry[key] = nil end
+    else
+        for _, part in pairs(entry) do part:Destroy() end
+        LN.parts[p] = nil
+    end
+end
+local function lnClearAll()
+    for p in pairs(LN.parts) do lnHide(p) end
+end
+local function lnStep()
+    for p in pairs(LN.parts) do
+        if not p.Parent then lnHide(p) end
+    end
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= LP then
+            local sameTeam = p.Team ~= nil and p.Team == LP.Team
+            local show = LN.who == "Todos" or (LN.who == "Time" and sameTeam) or (LN.who == "Inimigos" and not sameTeam)
+            local char = p.Character
+            local root = char and char:FindFirstChild("HumanoidRootPart")
+            local hum = char and char:FindFirstChildOfClass("Humanoid")
+            if show and root and hum and hum.Health > 0 then
+                local origin = root.Position
+                local look = root.CFrame.LookVector
+                local flat = Vector3.new(look.X, 0, look.Z)
+                if flat.Magnitude > 0.01 then
+                    lnDraw(p, "face", origin, origin + flat.Unit * LN.dist, LN.color, LN.width)
+                end
+                local vel = root.AssemblyLinearVelocity
+                local move = Vector3.new(vel.X, 0, vel.Z)
+                if LN.move and move.Magnitude > 2 then
+                    local reach = math.min(LN.dist, move.Magnitude * 2.5 + 6)
+                    lnDraw(p, "move", origin, origin + move.Unit * reach, LN.color:Lerp(Color3.new(1, 1, 1), 0.55), LN.width * 0.6)
+                else
+                    lnHide(p, "move")
+                end
+            else
+                lnHide(p)
+            end
+        end
+    end
+end
+local function lnSet(on)
+    if LN.conn then LN.conn:Disconnect() LN.conn = nil end
+    if on then
+        LN.conn = RunService.RenderStepped:Connect(lnStep)
+    else
+        lnClearAll()
+    end
+end
+STATE.onCleanup(function() lnSet(false) end)
 
 local SL = { on = false, conn = nil, orig = nil }
 local function slHumanoid()
@@ -2760,7 +3203,7 @@ local function nearestBallPart()
     return best
 end
 
-STATE.connect(RunService.RenderStepped, function()
+local function prStep()
     if not PR.on then
         if PR.marker then PR.clear() end
         return
@@ -2790,7 +3233,7 @@ STATE.connect(RunService.RenderStepped, function()
         inCourt = (not ok) or res
     end
 
-    local color, text = Color3.fromRGB(168, 120, 255), ""
+    local color, text = Color3.fromRGB(255, 150, 40), ""
     if PR.mode == "Completo" then
         if netHit then
             color, text = Color3.fromRGB(250, 180, 40), "REDE"
@@ -2810,8 +3253,18 @@ STATE.connect(RunService.RenderStepped, function()
     PR.label.Visible = PR.mode ~= "Marcação"
     PR.label.Text = (text ~= "" and (text .. "  ") or "") .. string.format("%.1fs", t)
     PR.label.TextColor3 = color
-end)
-STATE.onCleanup(PR.clear)
+end
+local prConn
+local function prSet(on)
+    PR.on = on
+    if prConn then prConn:Disconnect() prConn = nil end
+    if on then
+        prConn = RunService.RenderStepped:Connect(prStep)
+    else
+        PR.clear()
+    end
+end
+STATE.onCleanup(function() prSet(false) end)
 
 local function claimLevel()
     local rf = path(Services, "LevelService", "RF", "ClaimLevelRewards")
@@ -2851,7 +3304,7 @@ local function redeemAll()
     notify("Códigos", UI.trf("%d código(s) enviado(s).", #codes))
 end
 
-local CS = { on = false, found = nil, patched = {}, bind = "ScyFeNoShake" }
+local CS = { on = false, found = nil, patched = {}, bind = "DaishynNoShake" }
 
 local function makeDummy()
     local d = {}
@@ -2877,7 +3330,7 @@ local function csScan()
     end
     local names = {}
     for _, m in ipairs(CS.found) do table.insert(names, m:GetFullName()) end
-    print("[ScyFe] módulos de shake encontrados: " .. (#names > 0 and table.concat(names, ", ") or "nenhum"))
+    print("[Daishyn] módulos de shake encontrados: " .. (#names > 0 and table.concat(names, ", ") or "nenhum"))
 end
 
 local function csPatch()
@@ -2939,7 +3392,7 @@ local function csSet(on)
 end
 STATE.onCleanup(function() csSet(false) end)
 
-local FOLDER = "ScyFeVisuals"
+local FOLDER = "Daishyn"
 local function fsReady()
     if not (writefile and readfile and isfolder and makefolder) then return false end
     pcall(function()
@@ -2948,6 +3401,49 @@ local function fsReady()
     end)
     return true
 end
+local function migrateOld()
+    if not (isfolder and listfiles and readfile and writefile) then return end
+    pcall(function()
+        if isfolder("ScyFeVisuals/configs") and fsReady() and #listfiles(FOLDER .. "/configs") == 0 then
+            for _, f in ipairs(listfiles("ScyFeVisuals/configs")) do
+                local name = tostring(f):match("([^/\\]+%.json)$")
+                if name then writefile(FOLDER .. "/configs/" .. name, readfile(f)) end
+            end
+            if isfile("ScyFeVisuals/autoload.txt") then
+                writefile(FOLDER .. "/autoload.txt", readfile("ScyFeVisuals/autoload.txt"))
+            end
+        end
+    end)
+end
+migrateOld()
+
+local FAV_FILE = FOLDER .. "/favorites.json"
+local favData = {}
+local function loadFavorites()
+    if not (isfile and readfile) then return end
+    local ok, raw = pcall(function()
+        if isfile(FAV_FILE) then return readfile(FAV_FILE) end
+        return nil
+    end)
+    if ok and raw then
+        local ok2, data = pcall(HttpService.JSONDecode, HttpService, raw)
+        if ok2 and type(data) == "table" then favData = data end
+    end
+end
+local function saveFavorites()
+    if not fsReady() then return end
+    local ok, json = pcall(HttpService.JSONEncode, HttpService, favData)
+    if ok then pcall(writefile, FAV_FILE, json) end
+end
+loadFavorites()
+UI.favStore = {
+    get = function(id) return favData[id] end,
+    set = function(id, list)
+        favData[id] = list
+        saveFavorites()
+    end,
+}
+
 local function cfgPath(name) return FOLDER .. "/configs/" .. name .. ".json" end
 local function cleanName(name)
     return (tostring(name or ""):gsub("[^%w%-_ ]", ""):gsub("^%s+", ""):gsub("%s+$", ""))
@@ -2971,8 +3467,10 @@ end
 local function collect()
     local data = {}
     for id, c in pairs(UI.controls) do
-        local ok, v = pcall(c.get)
-        if ok and v ~= nil then data[id] = v end
+        if not string.find(id, "#fav", 1, true) then
+            local ok, v = pcall(c.get)
+            if ok and v ~= nil then data[id] = v end
+        end
     end
     return data
 end
@@ -2998,7 +3496,7 @@ local function loadConfig(name, silent)
     end
     for id, v in pairs(data) do
         local c = UI.controls[id]
-        if c then pcall(c.set, v) end
+        if c and not string.find(id, "#fav", 1, true) then pcall(c.set, v) end
     end
     notify("Config", UI.trf("Carregada: %s", name))
     return true
@@ -3018,7 +3516,7 @@ local function writeAutoload(name)
 end
 
 loadingStatus("Montando menu...", 0.8)
-do
+local function buildMenu()
 UI.EN = {
     ["Jogo"] = "Game", ["Personagem"] = "Character", ["Visuais"] = "Visuals", ["Misc"] = "Misc",
     ["Proteção"] = "Protection", ["Config"] = "Settings",
@@ -3102,6 +3600,30 @@ UI.EN = {
     ["Convite copiado: %s"] = "Invite copied: %s", ["Não consegui copiar. Convite: %s"] = "Couldn't copy. Invite: %s",
     ["Adicionado"] = "Added", ["Alterado"] = "Changed", ["Modificado"] = "Modified", ["Excluído"] = "Removed", ["Corrigido"] = "Fixed",
     ["Versão 1.0"] = "Version 1.0",
+    ["Avisos"] = "Notices", ["Últimos avisos"] = "Latest notices", ["Linhas"] = "Lines",
+    ["Linhas nos inimigos"] = "Enemy lines", ["O que o Anti-Lag afeta"] = "What Anti-Lag affects",
+    ["Linhas nos Inimigos"] = "Enemy Lines", ["Mostra pra onde cada jogador está olhando e se movendo."] = "Shows where each player is facing and moving.",
+    ["Mostrar"] = "Show", ["Quem recebe a linha."] = "Who gets a line.", ["Inimigos"] = "Enemies", ["Time"] = "Team", ["Todos"] = "All",
+    ["Cor da linha"] = "Line color", ["Cor das linhas."] = "Color of the lines.",
+    ["Espessura da linha"] = "Line thickness", ["Grossura em studs."] = "Thickness in studs.",
+    ["Distância da linha"] = "Line distance", ["Comprimento em studs."] = "Length in studs.",
+    ["Linha de movimento"] = "Movement line", ["Mostra também pra onde o jogador está andando."] = "Also shows where the player is moving.",
+    ["Personagens"] = "Characters", ["Skins e roupas dos outros jogadores (avatar do Roblox)."] = "Skins and clothes of other players (Roblox avatars).",
+    ["Texturas e materiais da bola."] = "Ball textures and materials.",
+    ["Quadra"] = "Court", ["Cenário, materiais e texturas da quadra."] = "Scenery, materials and textures of the court.",
+    ["Partículas, rastros e luzes (score effects e outros)."] = "Particles, trails and lights (score effects and more).",
+    ["Iluminação e sombras"] = "Lighting and shadows", ["Sombras, névoa e pós-processamento."] = "Shadows, fog and post-processing.",
+    ["Qualidade gráfica"] = "Graphics quality", ["Nível de qualidade do Roblox."] = "Roblox quality level.",
+    ["Tema"] = "Theme", ["Automático usa Halloween de 20/10 a 02/11."] = "Automatic uses Halloween from Oct 20 to Nov 2.",
+    ["Halloween"] = "Halloween", ["Nenhum"] = "None",
+    ["Pílula, bolha ou nenhum (só pela tecla do painel)."] = "Pill, bubble or none (panel key only).",
+    ["Transparência da pílula"] = "Pill transparency", ["Só o botão pílula."] = "Pill button only.",
+    ["Transparência da bolha"] = "Bubble transparency", ["Só o botão bolha."] = "Bubble button only.",
+    ["Defina a tecla do painel antes de usar Nenhum."] = "Set the panel key before using None.",
+    ["Nome pra criar ou renomear uma config."] = "Name to create or rename a config.",
+    ["Pesquise ou escolha uma. [Auto] carrega ao iniciar."] = "Search or pick one. [Auto] loads on start.",
+    ["Renomear"] = "Rename", ["Renomeia a escolhida pro nome digitado."] = "Renames the chosen one to the typed name.",
+    ["Renomeada: %s"] = "Renamed: %s", ["Não consegui renomear."] = "Couldn't rename.",
     ["Estilo da GUI"] = "GUI style", ["Clean: simples. Soft: brilho e degradê."] = "Clean: simple. Soft: glow and gradient.",
     ["Tecla do painel"] = "Panel key", ["Toque na caixa e aperte a tecla."] = "Tap the box and press a key.",
     ["Descarregar Script"] = "Unload Script", ["Desfaz tudo e fecha o menu."] = "Undoes everything and closes the menu.",
@@ -3138,9 +3660,11 @@ local function autoText()
     return UI.trf("Auto load: %s", readAutoload() or UI.tr("nenhum"))
 end
 
+local Avisos = UI.tab("Avisos", "Avisos", Color3.fromRGB(255, 84, 84))
 local Jogo = {
     Hitbox = UI.tab("Hitbox", "Jogo"),
     Habilidades = UI.tab("Habilidades", "Jogo"),
+    Linhas = UI.tab("Linhas", "Jogo"),
     Desempenho = UI.tab("Desempenho", "Jogo"),
 }
 
@@ -3162,7 +3686,7 @@ gHit:slider({
 })
 gHit:dropdown({
     Title = "Cor do Hitbox", Desc = "Cor da esfera.",
-    Id = "hb_color", Options = HB_COLOR_NAMES, Value = "Roxo",
+    Id = "hb_color", Options = HB_COLOR_NAMES, Value = "Laranja",
     Callback = function(v)
         local c = HB_COLORS[v]
         if c then
@@ -3212,8 +3736,7 @@ gMove:toggle({
     Title = "ESP de Pulo", Desc = "Destaca inimigos enquanto pulam.",
     Id = "esp", Hotkey = true,
     Callback = function(v)
-        Cfg.ESP = v
-        if not v then espClearAll() end
+        espSet(v)
     end,
 })
 gMove:dropdown({
@@ -3231,6 +3754,42 @@ gMove:toggle({
     Callback = function(v) ESP.outlineOnly = v end,
 })
 
+local gLines = Jogo.Linhas:group("Linhas nos inimigos")
+gLines:toggle({
+    Title = "Linhas nos Inimigos", Desc = "Mostra pra onde cada jogador está olhando e se movendo.",
+    Id = "lines_on", Hotkey = true,
+    Callback = function(v) lnSet(v) end,
+})
+gLines:dropdown({
+    Title = "Mostrar", Desc = "Quem recebe a linha.",
+    Id = "lines_who", Options = { "Inimigos", "Time", "Todos" }, Value = "Inimigos",
+    Callback = function(v) LN.who = v end,
+})
+gLines:dropdown({
+    Title = "Cor da linha", Desc = "Cor das linhas.",
+    Id = "lines_color", Options = { "Branco", "Verde", "Azul", "Vermelho", "Amarelo", "Roxo", "Laranja", "Rosa" },
+    Value = "Vermelho",
+    Callback = function(v)
+        local c = HB_COLORS[v]
+        if c then LN.color = c[1] end
+    end,
+})
+gLines:slider({
+    Title = "Espessura da linha", Desc = "Grossura em studs.",
+    Id = "lines_width", Min = 0.05, Max = 1, Step = 0.05, TypeStep = 0.01, Value = 0.15,
+    Callback = function(v) LN.width = v end,
+})
+gLines:slider({
+    Title = "Distância da linha", Desc = "Comprimento em studs.",
+    Id = "lines_dist", Min = 10, Max = 200, Step = 5, Value = 50,
+    Callback = function(v) LN.dist = v end,
+})
+gLines:toggle({
+    Title = "Linha de movimento", Desc = "Mostra também pra onde o jogador está andando.",
+    Id = "lines_move", Value = true,
+    Callback = function(v) LN.move = v end,
+})
+
 local gPerf = Jogo.Desempenho:group("Gráficos")
 gPerf:toggle({
     Title = "Anti-Lag", Desc = "Reduz os gráficos pra rodar mais leve.",
@@ -3240,6 +3799,23 @@ gPerf:toggle({
         if v then alEnable() else alRestore() end
     end,
 })
+local gAL = Jogo.Desempenho:group("O que o Anti-Lag afeta")
+for _, item in ipairs({
+    { "chars", "Personagens", "Skins e roupas dos outros jogadores (avatar do Roblox)." },
+    { "ball", "Bola", "Texturas e materiais da bola." },
+    { "court", "Quadra", "Cenário, materiais e texturas da quadra." },
+    { "fx", "Efeitos", "Partículas, rastros e luzes (score effects e outros)." },
+    { "light", "Iluminação e sombras", "Sombras, névoa e pós-processamento." },
+    { "quality", "Qualidade gráfica", "Nível de qualidade do Roblox." },
+}) do
+    gAL:toggle({
+        Title = item[2], Desc = item[3], Id = "al_" .. item[1], Value = true,
+        Callback = function(v)
+            AL.opts[item[1]] = v
+            alRefresh()
+        end,
+    })
+end
 
 local Personagem = {
     Movimento = UI.tab("Movimento", "Personagem"),
@@ -3325,8 +3901,7 @@ gPred:toggle({
     Title = "Marcador de Queda", Desc = "Mostra onde a bola cai: dentro, fora ou rede.",
     Id = "pred", Hotkey = true,
     Callback = function(v)
-        PR.on = v
-        if not v then PR.clear() end
+        prSet(v)
     end,
 })
 gPred:dropdown({
@@ -3354,6 +3929,7 @@ gBall:toggle({
     Id = "ball_on", Hotkey = true,
     Callback = function(v)
         Cfg.BallOn = v
+        childUpdate()
         ballApplyAll()
     end,
 })
@@ -3362,6 +3938,7 @@ gBall:toggle({
     Id = "ball_rand", Hotkey = true,
     Callback = function(v)
         Cfg.BallRandom = v
+        childUpdate()
         ballApplyAll()
     end,
 })
@@ -3440,10 +4017,10 @@ local Protecao = UI.tab("Custom Protect", "Proteção")
 local gProt = Protecao:group("Custom Protect")
 gProt:input({
     Title = "Nome", Desc = "Aparece no lugar do seu nome real.",
-    Id = "prot_name", Value = Cfg.Name, Placeholder = "SCYP4",
+    Id = "prot_name", Value = Cfg.Name, Placeholder = "Daishyn",
     Callback = function(text)
         text = cleanName(text)
-        if text == "" then text = "SCYP4" end
+        if text == "" then text = "Daishyn" end
         Cfg.Name = text
         if Cfg.ProtectOn then
             protNametag()
@@ -3481,7 +4058,7 @@ local BACKGROUNDS = {
 }
 local BORDERS = { Roxo = "#A878FF", Branco = "#FFFFFF", Cinza = "#555560", Preto = "#000000", Azul = "#5A96FF", Rosa = "#FF78C8" }
 
-local chosen = { accent = "Roxo", accentHex = "", bg = "Padrão", bgHex = "", border = "Padrão", borderHex = "" }
+local chosen = { accent = "Tema", accentHex = "", bg = "Padrão", bgHex = "", border = "Padrão", borderHex = "" }
 local function applyColors()
     UI.setAccent(parseHex(chosen.accentHex) or parseHex(ACCENTS[chosen.accent]))
     UI.setBackground(parseHex(chosen.bgHex) or parseHex(BACKGROUNDS[chosen.bg] or ""))
@@ -3491,8 +4068,8 @@ end
 local gColors = Config.Aparencia:group("Cores")
 gColors:dropdown({
     Title = "Cor de destaque", Desc = "Cor principal dos botões e detalhes.",
-    Id = "ui_accent", Options = { "Roxo", "Azul", "Ciano", "Verde", "Rosa", "Vermelho", "Laranja", "Amarelo", "Branco" },
-    Value = "Roxo",
+    Id = "ui_accent", Options = { "Tema", "Laranja", "Roxo", "Azul", "Ciano", "Verde", "Rosa", "Vermelho", "Amarelo", "Branco" },
+    Value = "Tema",
     Callback = function(v)
         chosen.accent = v
         applyColors()
@@ -3547,6 +4124,11 @@ gLook:dropdown({
     Callback = function(v) UI.setStyle(v) end,
 })
 gLook:dropdown({
+    Title = "Tema", Desc = "Automático usa Halloween de 20/10 a 02/11.",
+    Id = "ui_theme", Options = { "Automático", "Halloween", "Roxo" }, Value = "Automático",
+    Callback = function(v) UI.setTheme(v) end,
+})
+gLook:dropdown({
     Title = "Fundo", Desc = "Sólido, gradiente ou automático (segue o estilo).",
     Id = "ui_bgmode", Options = { "Automático", "Sólido", "Gradiente" }, Value = "Automático",
     Callback = function(v) UI.setGradient(v) end,
@@ -3567,14 +4149,24 @@ gLook:dropdown({
     Callback = function(v) UI.setAnim(v) end,
 })
 gLook:dropdown({
-    Title = "Botão de abrir", Desc = "Como abrir o painel: pílula ou bolha.",
-    Id = "ui_opener", Options = { "Pílula", "Bolha" }, Value = "Pílula",
+    Title = "Botão de abrir", Desc = "Pílula, bolha ou nenhum (só pela tecla do painel).",
+    Id = "ui_opener", Options = { "Pílula", "Bolha", "Nenhum" }, Value = "Pílula",
     Callback = function(v) UI.setOpener(v) end,
 })
 gLook:dropdown({
     Title = "Transparência da GUI", Desc = "Menor % = mais opaca.",
     Id = "ui_transp", Options = { "0%", "10%", "20%", "30%", "40%", "50%" }, Value = "0%",
     Callback = function(v) UI.setTransparency(tonumber((tostring(v):gsub("%%", "")))) end,
+})
+gLook:dropdown({
+    Title = "Transparência da pílula", Desc = "Só o botão pílula.",
+    Id = "ui_pill_transp", Options = { "0%", "10%", "20%", "30%", "40%", "50%", "60%", "70%", "80%", "90%" }, Value = "0%",
+    Callback = function(v) UI.setPillTransparency(tonumber((tostring(v):gsub("%%", "")))) end,
+})
+gLook:dropdown({
+    Title = "Transparência da bolha", Desc = "Só o botão bolha.",
+    Id = "ui_bubble_transp", Options = { "0%", "10%", "20%", "30%", "40%", "50%", "60%", "70%", "80%", "90%" }, Value = "0%",
+    Callback = function(v) UI.setBubbleTransparency(tonumber((tostring(v):gsub("%%", "")))) end,
 })
 gLook:dropdown({
     Title = "Tamanho da GUI", Desc = "Escala do painel em %.",
@@ -3597,62 +4189,43 @@ gMenu:button({
     Callback = function() STATE.teardown() end,
 })
 
-local DISCORD_CODE = "wQsTbapFVT"
-local DISCORD_URL = "https://discord.gg/" .. DISCORD_CODE
-local gDiscord = Config.Menu:group("Comunidade")
-gDiscord:button({
-    Title = "Entrar no Discord", Desc = "Copia o convite e tenta abrir o Discord.",
-    Callback = function()
-        local copied = false
-        for _, fnName in ipairs({ "setclipboard", "toclipboard", "set_clipboard" }) do
-            local fn = getgenv()[fnName]
-            if type(fn) == "function" and pcall(fn, DISCORD_URL) then
-                copied = true
-                break
-            end
-        end
-        local req = (syn and syn.request) or request or http_request
-        if req then
-            pcall(function()
-                req({
-                    Url = "http://127.0.0.1:6463/rpc?v=1", Method = "POST",
-                    Headers = { ["Content-Type"] = "application/json", Origin = "https://discord.com" },
-                    Body = HttpService:JSONEncode({
-                        cmd = "INVITE_BROWSER", args = { code = DISCORD_CODE }, nonce = HttpService:GenerateGUID(false),
-                    }),
-                })
-            end)
-        end
-        if copied then
-            notify("Discord", UI.trf("Convite copiado: %s", DISCORD_URL))
-        else
-            notify("Discord", UI.trf("Não consegui copiar. Convite: %s", DISCORD_URL))
-        end
-    end,
-})
+local NOTICES = {
+    {
+        date = "28/10/2026", version = "1.0",
+        text = "O script agora se chama Daishyn. Tema Halloween ativo (Config > Aparência > Tema). Veja as novidades no Log de alterações.",
+    },
+}
+local gNotices = Avisos:group("Últimos avisos")
+for _, n in ipairs(NOTICES) do gNotices:notice(n.date, n.version, n.text) end
 
 local LOG = {
     { "Adicionado", {
-        "• GUI própria com sidebar em categorias, busca, atalhos (+/-) e configs salvas com auto load",
-        "• Estilos Clean e Soft, cores personalizáveis, fundo sólido ou gradiente, fonte, animações e botão pílula/bolha",
-        "• Hitbox da bola (cor e tamanho de 0.1 a 20), Carga Máxima, Saque Máximo, Pés de Chumbo, ESP de Pulo com cor e Anti-Lag",
-        "• Shift Lock Automático e Tremor de Câmera desativável",
-        "• Efeito de ponto com favoritos, lista com % e sorteio; skins de bola, camisa e card",
-        "• Marcador de queda (3 modos e tamanho), Custom Protect (SCYP4), recompensas e códigos",
-        "• Idiomas PT/EN, tela de carregamento, botão do Discord e este log",
+        "• Nome Daishyn, tema Halloween (laranja com gradiente) automático de 20/10 a 02/11 e tema Roxo opcional",
+        "• Tela de carregamento em mini painel (título, barra até 100% e botão do Discord) que se expande até a GUI",
+        "• Botão do Discord destacado na sidebar",
+        "• Anti-Lag configurável por categoria: personagens, bola, quadra, efeitos, iluminação e qualidade",
+        "• Linhas nos inimigos (cor, espessura, distância, quem mostrar e linha de movimento)",
+        "• Configs: renomear, Auto Load visível na lista e favoritos globais (efeitos, bolas, camisas e cards)",
+        "• Transparência separada para GUI, pílula e bolha; bolha com imagem; opção Nenhum (só pela tecla)",
+        "• Categoria Avisos (vermelha) com data e versão de cada aviso",
+        "• GUI própria com sidebar em categorias, busca, atalhos (+/-), estilos Clean e Soft, cores, fonte e animações",
+        "• Hitbox, Carga Máxima, Saque Máximo, Pés de Chumbo, ESP de Pulo, Shift Lock Automático e Tremor de Câmera desativável",
+        "• Efeito de ponto com favoritos e lista com %, skins de bola, camisa e card, marcador de queda e Custom Protect",
+        "• Recompensas e códigos, idiomas PT/EN, auto load de configs e este log",
     } },
     { "Alterado", {
+        "• Nome padrão do Custom Protect e pasta de configs agora são Daishyn (as configs antigas são copiadas sozinhas)",
         "• Efeito de ponto usa o sistema original da source e ignora pontos de aliados",
         "• Anti-Lag igual à source, restaurando qualidade e gráficos ao desligar",
-        "• Shift Lock só mexe no personagem com a função ligada",
-        "• Tremor de câmera respeita o Shift Lock",
+        "• Shift Lock só mexe no personagem com a função ligada; tremor de câmera respeita o Shift Lock",
     } },
     { "Modificado", {
         "• Layout em cards de largura total, no estilo Acrylic",
-        "• Pílula arrastável e mais baixa; a transparência afeta toda a GUI",
-        "• Efeito de ponto e hitbox só mantêm conexões quando ligados (menos travadas ao entrar na partida)",
+        "• ESP, marcador de queda, linhas, hitbox e bola só mantêm conexões quando ligados (menos travadas)",
+        "• Anti-Lag processa objetos novos em lotes pra evitar picos de lag",
     } },
     { "Excluído", {
+        "• Tema roxo como padrão (agora é opcional)",
         "• Corrigir Câmera (substituído por Tremor de Câmera)",
         "• Versões antigas de teste (Rayfield e GUI simples)",
     } },
@@ -3669,27 +4242,49 @@ end
 
 local gCfg = Config.Salvas:group("Configurações Salvas")
 local cfgNameInput = gCfg:input({
-    Title = "Nome da config", Desc = "Nome pra criar uma config.",
+    Title = "Nome da config", Desc = "Nome pra criar ou renomear uma config.",
     Placeholder = "minha-config",
 })
 local selectedCfg = nil
 local cfgDD
 local autoNote
+
+local function displayName(n)
+    return readAutoload() == n and (n .. "  [Auto]") or n
+end
+local function realName(d)
+    return (tostring(d):gsub("  %[Auto%]$", ""))
+end
+local function cfgLists()
+    local list, shown = listConfigs(), {}
+    for _, n in ipairs(list) do shown[#shown + 1] = displayName(n) end
+    return list, shown
+end
 local function refreshCfgList(selectName)
-    local list = listConfigs()
-    cfgDD:SetOptions(list)
-    if selectName and table.find(list, selectName) then
-        selectedCfg = selectName
-        cfgDD:Set(selectName)
-    elseif selectedCfg and not table.find(list, selectedCfg) then
+    local list, shown = cfgLists()
+    cfgDD:SetOptions(shown)
+    local want = selectName or selectedCfg
+    if want and table.find(list, want) then
+        selectedCfg = want
+        cfgDD:Set(displayName(want))
+    else
         selectedCfg = nil
         cfgDD:Set("-")
     end
 end
+local function renameConfig(old, new)
+    if not (isfile and readfile and writefile and delfile) then return false end
+    local ok, raw = pcall(readfile, cfgPath(old))
+    if not ok or not pcall(writefile, cfgPath(new), raw) then return false end
+    pcall(delfile, cfgPath(old))
+    if readAutoload() == old then writeAutoload(new) end
+    return true
+end
+local _, initialShown = cfgLists()
 cfgDD = gCfg:dropdown({
-    Title = "Config escolhida", Desc = "Pesquise ou escolha uma.",
-    Options = listConfigs(), Value = "-",
-    Callback = function(v) selectedCfg = v end,
+    Title = "Config escolhida", Desc = "Pesquise ou escolha uma. [Auto] carrega ao iniciar.",
+    Options = initialShown, Value = "-",
+    Callback = function(v) selectedCfg = realName(v) end,
 })
 local function needSelected()
     if not selectedCfg then notify("Config", "Escolha uma config na lista.") return false end
@@ -3722,6 +4317,22 @@ gCfg:button({
     end,
 })
 gCfg:button({
+    Title = "Renomear", Desc = "Renomeia a escolhida pro nome digitado.",
+    Callback = function()
+        if not needSelected() then return end
+        local name = cleanName(cfgNameInput:Get())
+        if name == "" then notify("Config", "Digite um nome primeiro.") return end
+        if cfgExists(name) then notify("Config", "Já existe. Use Sobrescrever.") return end
+        if renameConfig(selectedCfg, name) then
+            notify("Config", UI.trf("Renomeada: %s", name))
+            refreshCfgList(name)
+            autoNote:SetText(autoText())
+        else
+            notify("Config", "Não consegui renomear.")
+        end
+    end,
+})
+gCfg:button({
     Title = "Apagar", Desc = "Remove a config escolhida.",
     Callback = function()
         if not needSelected() then return end
@@ -3743,7 +4354,8 @@ gCfg:button({
     Callback = function()
         if needSelected() and writeAutoload(selectedCfg) then
             autoNote:SetText(autoText())
-            notify("Config", UI.trf("Auto load: %s", selectedCfg))
+            refreshCfgList()
+            notify("Config", UI.trf("Auto load: %s", selectedCfg or "-"))
         end
     end,
 })
@@ -3752,6 +4364,7 @@ gCfg:button({
     Callback = function()
         writeAutoload("")
         autoNote:SetText(autoText())
+        refreshCfgList()
         notify("Config", "Auto load removido.")
     end,
 })
@@ -3759,7 +4372,7 @@ autoNote = gCfg:note(autoText())
 
 UI.setHint("Pílula ou tecla do painel")
 UI.select("Hitbox")
-print("[ScyFe] pronto.")
+print("[Daishyn] pronto.")
 
 local autoName = readAutoload()
 if autoName and mine() then
@@ -3769,10 +4382,10 @@ if autoName and mine() then
 end
 loadingStatus("Pronto!", 1)
 task.wait(0.35)
-loadingHide()
-notify("ScyFe Visuals", "Carregado. Toque na pílula pra abrir/fechar.")
-
+loadingExpand(function() UI.reveal() end)
+notify("Daishyn", "Carregado. Toque na pílula pra abrir/fechar.")
 end
+buildMenu()
 
 end
 
